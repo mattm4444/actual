@@ -155,5 +155,102 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       await expect(modal).toBeHidden();
       await expect(row.getByTestId('category-funding-status')).toHaveCount(0);
     });
+
+    if (budgetType === 'Envelope') {
+      test('partially funds at nonzero priority and restores available funds with undo', async () => {
+        const row = budget.budgetTable.getByTestId('row').filter({
+          has: page
+            .getByTestId('category-name')
+            .getByText('Food', { exact: true }),
+        });
+        await row.getByTestId('category-name').hover();
+        await row
+          .getByRole('button', { name: 'Change category automations' })
+          .click();
+        const modal = page.getByRole('dialog');
+        await modal.getByRole('button', { name: 'Add an automation' }).click();
+        await modal.locator('#amount-field').fill('650');
+        await modal.locator('#amount-field').press('Tab');
+        await modal.getByRole('spinbutton', { name: 'Priority' }).fill('1');
+        await modal.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(modal).toBeHidden();
+        await budget.setBudgetedAmount('Food', '400');
+        const otherRow = budget.budgetTable.getByTestId('row').filter({
+          has: page
+            .getByTestId('category-name')
+            .getByText('Restaurants', { exact: true }),
+        });
+        const otherCell = otherRow.getByTestId('budget').first();
+        // The pinned demo has 300 in Restaurants and zero To Budget after
+        // setting Food to 400. Releasing 100 creates a partial-funding case.
+        await budget.setBudgetedAmount('Restaurants', '200');
+        const unchangedNeighbor = await otherCell.innerText();
+        const status = row.getByTestId('category-funding-status').first();
+        const fund = status.getByRole('button', { name: /^Fund Food for / });
+        await expect(status).toContainText('250.00 needed');
+        await fund.focus();
+        await page.keyboard.press('Space');
+        await expect(row.getByTestId('budget').first()).toHaveText('500.00');
+        await expect(status).toContainText('150.00 needed');
+        await expect(fund).toBeDisabled();
+        await expect(otherCell).toHaveText(unchangedNeighbor);
+        await expect(row).toMatchThemeScreenshots();
+        await page.keyboard.press('Control+z');
+        await expect(row.getByTestId('budget').first()).toHaveText('400.00');
+        await expect(fund).toBeEnabled();
+        await page.keyboard.press('Control+Shift+z');
+        await expect(row.getByTestId('budget').first()).toHaveText('500.00');
+      });
+    }
+
+    if (budgetType === 'Tracking') {
+      test('funds tracking income on desktop and mobile', async () => {
+        const row = budget.budgetTable.getByTestId('row').filter({
+          has: page
+            .getByTestId('category-name')
+            .getByText('Income', { exact: true }),
+        });
+        await row.getByTestId('category-name').hover();
+        await row
+          .getByRole('button', { name: 'Change category automations' })
+          .click();
+        const modal = page.getByRole('dialog');
+        await modal.getByRole('button', { name: 'Add an automation' }).click();
+        await modal.locator('#amount-field').fill('1200');
+        await modal.locator('#amount-field').press('Tab');
+        await modal.getByRole('spinbutton', { name: 'Priority' }).fill('0');
+        await modal.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(modal).toBeHidden();
+        const cell = row.getByTestId('budget').first();
+        await cell.click();
+        await cell.locator('input').fill('0');
+        await cell.locator('input').press('Enter');
+        const status = row.getByTestId('category-funding-status').first();
+        await expect(status).toContainText('1,200.00 needed');
+        await expect(row).toMatchThemeScreenshots();
+        await status.getByRole('button', { name: /^Fund Income for / }).click();
+        await expect(cell).toHaveText('1,200.00');
+        await expect(status).toHaveText('Funded');
+        await expect(row).toMatchThemeScreenshots();
+        await cell.click();
+        await cell.locator('input').fill('400');
+        await cell.locator('input').press('Enter');
+        await expect(status).toContainText('800.00 needed');
+        await page.setViewportSize({ width: 390, height: 844 });
+        const mobileRow = page.getByTestId('category-row').filter({
+          has: page
+            .getByTestId('category-name')
+            .getByText('Income', { exact: true }),
+        });
+        const mobileStatus = mobileRow.getByTestId('category-funding-status');
+        await expect(mobileStatus).toContainText('800.00 needed');
+        await expect(mobileRow).toMatchThemeScreenshots();
+        await mobileStatus
+          .getByRole('button', { name: /^Fund Income for / })
+          .click();
+        await expect(mobileStatus).toHaveText('Funded');
+        await expect(mobileRow).toMatchThemeScreenshots();
+      });
+    }
   });
 }
