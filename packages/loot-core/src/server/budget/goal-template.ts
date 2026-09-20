@@ -11,7 +11,11 @@ import type { Template } from '#types/models/templates';
 import { getSheetValue, isTrackingBudget, setBudget, setGoal } from './actions';
 import { CategoryTemplateContext } from './category-template-context';
 import { tombstoneOrphanCleanupGroups } from './cleanup-groups';
-import { checkTemplateNotes, storeNoteTemplates } from './template-notes';
+import {
+  checkTemplateNotes,
+  getCategoriesWithTemplates,
+  storeNoteTemplates,
+} from './template-notes';
 import type { TemplateNotification } from './template-notification';
 
 export function distributeRemainder(
@@ -390,4 +394,106 @@ export async function dryRunCategoryTemplate({
     budgeted: values.budgeted,
     perTemplate: templates.map(t => values.perTemplateContribution.get(t) ?? 0),
   };
+}
+
+export type CategoryFunding = {
+  budgeted: number;
+  recommended: number;
+  remaining: number;
+  amountToFund: number;
+};
+
+// Read the same saved definitions (including legacy note templates) as Apply,
+// without writing goal_def or cached goals just to render a budget row.
+async function computeCategoryFunding(month: string, categoryId: string) {
+  const { data: categories }: { data: CategoryEntity[] } = await aqlQuery(
+    q('categories').filter({ id: categoryId }).select('*'),
+  );
+  const category = categories[0];
+  if (!category || (category.is_income && !isTrackingBudget())) return null;
+  const templates: Template[] =
+    category.template_settings?.source === 'ui'
+      ? JSON.parse(category.goal_def || '[]')
+      : ((await getCategoriesWithTemplates([categoryId]))[0]?.templates ?? []);
+  if (templates.some(t => t.type === 'error')) {
+    throw new Error('Invalid budget automation');
+  }
+  // Standalone goals track a balance; the engine deliberately does not assign
+  // them a monthly budget. Cleanup-only and limit-only entries do not fund it.
+  if (!templates.some(t => t.directive === 'template' && t.type !== 'limit')) {
+    return null;
+  }
+  const input = { [categoryId]: templates };
+  // This is the same projection used by dryRunCategoryTemplate. The absolute
+  // budget recommendation already includes rollover, schedules and caps.
+  const projected = await computeTemplates(
+    month,
+    true,
+    input,
+    [category],
+    true,
+  );
+  if (projected.errors.length) throw new Error(projected.errors.join('\n'));
+  const context = projected.contexts[0];
+  if (!context) return null;
+  const values = context.getValues();
+  const budgeted = await getSheetValue(
+    monthUtils.sheetForMonth(month),
+    'budget-' + categoryId,
+  );
+  const remaining = Math.max(0, values.budgeted - budgeted);
+  // Apply uses available-funds/priority clamping. Never bypass that using the
+  // unconstrained projection, or silently pull money out of an overfunded row.
+  let amountToFund = 0;
+  if (remaining > 0) {
+    const applicable = await computeTemplates(month, true, input, [category]);
+    if (applicable.errors.length) throw new Error(applicable.errors.join('\n'));
+    const amount = applicable.contexts[0]?.getValues().budgeted ?? budgeted;
+    amountToFund = Math.max(0, Math.min(values.budgeted, amount) - budgeted);
+  }
+  return {
+    funding: {
+      budgeted,
+      recommended: values.budgeted,
+      remaining,
+      amountToFund,
+    },
+    values,
+  };
+}
+
+export async function getCategoryFunding({
+  month,
+  categoryId,
+}: {
+  month: string;
+  categoryId: CategoryEntity['id'];
+}): Promise<CategoryFunding | null> {
+  return (await computeCategoryFunding(month, categoryId))?.funding ?? null;
+}
+
+export async function fundCategory({
+  month,
+  categoryId,
+}: {
+  month: string;
+  categoryId: CategoryEntity['id'];
+}): Promise<void> {
+  // Called inside mutator(undoable(...)): recompute from current server state
+  // so stale UI data or repeated clicks can never reduce or double-fund a row.
+  const result = await computeCategoryFunding(month, categoryId);
+  if (!result || result.funding.amountToFund <= 0) return;
+  await batchMessages(async () => {
+    await setBudget({
+      month,
+      category: categoryId,
+      amount: result.funding.budgeted + result.funding.amountToFund,
+    });
+    await setGoal({
+      month,
+      category: categoryId,
+      goal: result.values.goal,
+      long_goal: result.values.longGoal ? 1 : null,
+    });
+  });
 }

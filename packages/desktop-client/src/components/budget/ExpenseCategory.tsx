@@ -18,6 +18,7 @@ import type {
 import { Row } from '#components/table';
 import { useDragRef } from '#hooks/useDragRef';
 
+import { CategoryFundingStatus } from './goals/CategoryFundingStatus';
 import { RenderMonths } from './RenderMonths';
 import { SidebarCategory } from './SidebarCategory';
 
@@ -80,6 +81,9 @@ export function ExpenseCategory({
       collapsed
       style={{
         backgroundColor: theme.budgetCurrentMonth,
+        height: 'auto',
+        flex: '0 0 auto',
+        minHeight: 32,
         opacity: cat.hidden || categoryGroup?.hidden ? 0.5 : undefined,
       }}
     >
@@ -104,18 +108,23 @@ export function ExpenseCategory({
 
         <RenderMonths>
           {({ month }) => (
-            <MonthComponent
-              month={month}
-              editing={
-                editingCell &&
-                editingCell.id === cat.id &&
-                editingCell.cell === month
-              }
-              category={cat}
-              onEdit={onEditMonth}
-              onBudgetAction={onBudgetAction}
-              onShowActivity={onShowActivity}
-            />
+            <>
+              <View style={{ height: 32, flexShrink: 0 }}>
+                <MonthComponent
+                  month={month}
+                  editing={
+                    editingCell &&
+                    editingCell.id === cat.id &&
+                    editingCell.cell === month
+                  }
+                  category={cat}
+                  onEdit={onEditMonth}
+                  onBudgetAction={onBudgetAction}
+                  onShowActivity={onShowActivity}
+                />
+              </View>
+              <CategoryFundingStatus category={cat} month={month} />
+            </>
           )}
         </RenderMonths>
       </View>
