@@ -1,6 +1,6 @@
 # Category funding validation
 
-Status: implementation and required automated validation are complete on `category-funding`. The final Linux CI results were reviewed at the user's request and passed. Ready for code review.
+Status: implementation and required automated validation are complete on `category-funding`. The final Linux CI results were reviewed at the user's request and passed. Ready for code review on [mattm4444/actual:category-funding](https://github.com/mattm4444/actual/tree/category-funding). Historical CI links below point to the earlier validation repository; application code is unchanged.
 
 ## Behavior
 
@@ -29,7 +29,7 @@ Standalone #goal, cleanup-only, and limit-only definitions do not prescribe a mo
 | packages/desktop-client/src/components/budget/goals/CategoryFundingStatus.tsx      | Shared translated status, accessible Fund control, privacy filter, error and busy states.                                                                                        |
 | packages/desktop-client/src/components/budget/goals/CategoryFundingStatus.test.tsx | Rendering, keyboard/focus, invalidation, removal, error, and busy-state tests.                                                                                                   |
 | packages/desktop-client/e2e/category-funding.test.ts                               | Real browser mutations, mouse/Enter/Space, excess funding, neighbors, undo/redo, month changes, automation changes, mobile, tracking income, priorities, and themed screenshots. |
-| .github/workflows/category-funding-validation.yml                                  | Manually dispatched private Linux container validation and exact-upstream comparison; read-only repository permissions.                                                          |
+| .github/workflows/category-funding-validation.yml                                  | Manually dispatched Linux container validation and exact-upstream comparison; read-only repository permissions.                                                                  |
 | upcoming-release-notes/category-funding.md                                         | Concise user-facing release note.                                                                                                                                                |
 | AGENT_HANDOFF.md                                                                   | Reproducible continuation instructions and exact limitations.                                                                                                                    |
 | feature-validation/category-funding/                                               | Evidence images and this report.                                                                                                                                                 |

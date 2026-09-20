@@ -5,10 +5,10 @@ Last updated: September 20, 2026. Implementation and required automated validati
 ## Repository and authorization
 
 - Local checkout: `C:\Users\mattf\Actual Budget`, branch `category-funding`.
-- Remote named `private`: https://github.com/mattm4444/actual-budget-category-feature. Push only to `private`; `origin` is public upstream.
+- Review destination: https://github.com/mattm4444/actual/tree/category-funding, remote `fork`. Push feature changes to `fork`; `origin` is the upstream Actual project. The older `private` remote is historical and is no longer the review destination.
 - Starting upstream: `5a131c7c8821ab09a04d66226f06b616b9b2c605`.
 - Latest implementation and Linux baselines: `1a8d3e0e4ac449598837b667af3c4861c2e2ce0e`.
-- The user has updated GitHub review access and requested this final commit/push. Keep using the configured `private` remote. No new PR or deployment was requested.
+- The user explicitly requested that all feature commits be published to the `mattm4444/actual` fork for review. Use `fork/category-funding` as the tracking branch. No new PR or deployment was requested.
 - Current direction: finish the closeout documentation, commit and push, then stop. Do not wait for, poll or monitor GitHub Actions, or rerun the full local suite when CI will run it. Investigate future CI failures when the user returns with them; follow the local AGENTS.md CI usage instructions.
 - Follow `AGENTS.md`, `.claude/skills/committing-actual-changes/SKILL.md`, `.claude/skills/running-vrts/SKILL.md` and `.github/agents/pr-and-commit-rules.md`. Prefix commits `[AI]`; never bypass hooks. Run Yarn from the repository root.
 
@@ -24,7 +24,7 @@ Standalone balance goals, cleanup-only and limit-only definitions have no engine
 
 ## Validation
 
-Verified passing Linux run: https://github.com/mattm4444/actual-budget-category-feature/actions/runs/35529409043
+Verified passing Linux run in the earlier validation repository: https://github.com/mattm4444/actual-budget-category-feature/actions/runs/35529409043
 
 Reviewed results: repository typecheck passed; lint passed with 659 warnings and zero errors; all nine unit-test workspaces passed (3383 assertions passed, three skipped); browser build passed; all 12 browser interactions passed; four visual-test scenarios passed against the 51 committed Linux screenshots. Snapshot generation was skipped, so the comparison validated the existing baselines. The 27 funding engine tests and 17 component tests passed. The AQL timeouts from the earlier run did not recur with serial workspace execution. No timeout thresholds or assertions were weakened.
 
@@ -58,7 +58,7 @@ corepack yarn oxlint --type-aware --quiet @featureFiles
 Configured Linux workflow (does not regenerate snapshots by default):
 
 ```powershell
-gh workflow run category-funding-validation.yml --repo mattm4444/actual-budget-category-feature --ref category-funding -f baseline=false -f updateSnapshots=false
+gh workflow run category-funding-validation.yml --repo mattm4444/actual --ref category-funding -f baseline=false -f updateSnapshots=false
 ```
 
 Set `baseline=true` only when an additional unchanged-upstream run is needed. Set `updateSnapshots=true` only for deliberate feature snapshot updates, inspect the generated PNGs and download/commit them. Never rename host snapshots to Linux names or update unrelated VRTs. Feature lint/test failures now fail the workflow rather than being ignored.
