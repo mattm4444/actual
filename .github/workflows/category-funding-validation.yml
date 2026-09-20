@@ -35,13 +35,23 @@ jobs:
       - run: yarn typecheck
       - run: yarn lint
       - run: yarn test
+        id: unit-tests
+        env:
+          LAGE_POOL_CONCURRENCY: '1'
+      - name: Diagnose AQL timeouts in isolation
+        if: failure() && steps.unit-tests.outcome == 'failure'
+        run: yarn workspace @actual-app/core test:node src/server/aql/schema/executors.test.ts --maxWorkers=1
       - run: yarn build:browser --skip-translations
+        id: browser-build
+        if: ${{ !cancelled() }}
       - name: Browser interactions
+        if: ${{ !cancelled() && steps.browser-build.outcome == 'success' }}
         run: yarn e2e category-funding.test.ts e2e/budget.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000
       - name: Generate only category funding screenshots
-        if: inputs.updateSnapshots
+        if: ${{ !cancelled() && inputs.updateSnapshots && steps.browser-build.outcome == 'success' }}
         run: yarn vrt category-funding.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000 --update-snapshots
       - name: Verify category funding screenshots
+        if: ${{ !cancelled() && steps.browser-build.outcome == 'success' }}
         run: yarn vrt category-funding.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
