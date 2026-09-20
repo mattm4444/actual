@@ -177,3 +177,46 @@ it('preserves underfunding and normal error notification if the mutation fails',
   expect(screen.getByText('650.00 needed')).toBeInTheDocument();
   expect(screen.queryByText('Funded')).not.toBeInTheDocument();
 });
+
+it('keeps Fund keyboard activation out of the budget cell navigation handler', async () => {
+  const user = userEvent.setup();
+  const navigateCell = vi.fn(event => event.preventDefault());
+  render(
+    <TestProviders queryClient={client} store={store}>
+      <div onKeyDown={navigateCell}>
+        <CategoryFundingStatus category={category} month="2024-01" />
+      </div>
+    </TestProviders>,
+  );
+  const button = await screen.findByRole('button', { name: /Fund Groceries/ });
+  act(() => button.focus());
+  await user.keyboard('{Enter}');
+  expect(await screen.findByText('Funded')).toBeInTheDocument();
+  expect(navigateCell).not.toHaveBeenCalled();
+  expect(fund).toHaveBeenCalledOnce();
+});
+
+it('preserves keyboard focus while an edit triggers a background refresh', async () => {
+  renderStatus();
+  const button = await screen.findByRole('button', { name: /Fund Groceries/ });
+  act(() => button.focus());
+  let finishRead: ((value: CategoryFunding | null) => void) | undefined;
+  read.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finishRead = resolve;
+      }),
+  );
+  let refreshing: Promise<void>;
+  act(() => {
+    refreshing = client.invalidateQueries({ queryKey: fundingQueries.all() });
+  });
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  expect(button).toBeEnabled();
+  expect(button).toHaveFocus();
+  await act(async () => {
+    finishRead?.(funding);
+    await refreshing;
+  });
+  expect(button).toHaveFocus();
+});

@@ -46,7 +46,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
         .getByTestId('budget')
         .first()
         .textContent();
-      await row.hover();
+      await row.getByTestId('category-name').hover();
       await row
         .getByRole('button', { name: 'Change category automations' })
         .click();
@@ -80,10 +80,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       await expect(cell).toHaveText('650.00');
       await expect(status).toHaveText('Funded');
       await expect(fund).toHaveCount(0);
-      await row.screenshot({
-        path: testInfo.outputPath('after-clicking-fund.png'),
-      });
-      await expect(row).toMatchThemeScreenshots();
+
       await expect(otherRow.getByTestId('budget').first()).toHaveText(
         otherBudget ?? '',
       );
@@ -98,6 +95,16 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       await expect(cell).toHaveText('650.00');
       await expect(status).toHaveText('Funded');
       await row.screenshot({ path: testInfo.outputPath('fully-funded.png') });
+
+      await budget.setBudgetedAmount('Food', '400');
+      await expect(status).toContainText('250.00 needed');
+      await fund.click();
+      await expect(cell).toHaveText('650.00');
+      await expect(status).toHaveText('Funded');
+      await row.screenshot({
+        path: testInfo.outputPath('after-clicking-fund.png'),
+      });
+      await expect(row).toMatchThemeScreenshots();
 
       await budget.setBudgetedAmount('Food', '800');
       await expect(cell).toHaveText('800.00');
