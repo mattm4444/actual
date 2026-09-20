@@ -1,6 +1,6 @@
 # Actual Budget category funding handoff
 
-Last updated: September 20, 2026. Implementation is finished. The user reports that CI has finished and will provide its results; the latest run result has not been retrieved. See [the detailed validation report](feature-validation/category-funding/VALIDATION.md) for the exact file map, behavior, evidence and manual checklist.
+Last updated: September 20, 2026. Implementation and required automated validation are complete. The final Linux CI results were reviewed at the user's request and passed. The branch is ready for code review. See [the detailed validation report](feature-validation/category-funding/VALIDATION.md) for the exact file map, behavior, evidence and manual checklist.
 
 ## Repository and authorization
 
@@ -9,7 +9,7 @@ Last updated: September 20, 2026. Implementation is finished. The user reports t
 - Starting upstream: `5a131c7c8821ab09a04d66226f06b616b9b2c605`.
 - Latest implementation and Linux baselines: `1a8d3e0e4ac449598837b667af3c4861c2e2ce0e`.
 - The user has updated GitHub review access and requested this final commit/push. Keep using the configured `private` remote. No new PR or deployment was requested.
-- Latest instruction: commit and push, then end the turn. Do not wait for, poll or monitor GitHub Actions. Do not rerun the full local test suite when CI will run it. The user will return with CI results.
+- Current direction: finish the closeout documentation, commit and push, then stop. Do not wait for, poll or monitor GitHub Actions, or rerun the full local suite when CI will run it. Investigate future CI failures when the user returns with them; follow the local AGENTS.md CI usage instructions.
 - Follow `AGENTS.md`, `.claude/skills/committing-actual-changes/SKILL.md`, `.claude/skills/running-vrts/SKILL.md` and `.github/agents/pr-and-commit-rules.md`. Prefix commits `[AI]`; never bypass hooks. Run Yarn from the repository root.
 
 ## User requirements and implementation
@@ -24,7 +24,11 @@ Standalone balance goals, cleanup-only and limit-only definitions have no engine
 
 ## Validation
 
-Latest Linux run (result to be provided by the user): https://github.com/mattm4444/actual-budget-category-feature/actions/runs/35529409043
+Verified passing Linux run: https://github.com/mattm4444/actual-budget-category-feature/actions/runs/35529409043
+
+Reviewed results: repository typecheck passed; lint passed with 659 warnings and zero errors; all nine unit-test workspaces passed (3383 assertions passed, three skipped); browser build passed; all 12 browser interactions passed; four visual-test scenarios passed against the 51 committed Linux screenshots. Snapshot generation was skipped, so the comparison validated the existing baselines. The 27 funding engine tests and 17 component tests passed. The AQL timeouts from the earlier run did not recur with serial workspace execution. No timeout thresholds or assertions were weakened.
+
+The tested commit is `76ba663a091f96d5ab290478a068954fc7afbe51`. Subsequent closeout commits change only documentation and evidence images, not application code. No separate CI result is claimed for those documentation commits. No implementation fixes remain from this validation; reviewer feedback and any release decision are subsequent steps.
 
 This run tests workflow commit `76ba663a0` with application code unchanged from `1a8d3e0e4` and screenshot regeneration disabled. Workspaces run serially to reduce contention; browser checks continue independently after a unit failure without hiding that failure. All 51 Linux baselines were generated in the pinned Playwright container in earlier run `35519077705`, then rerun and visually inspected across light/dark/midnight themes. The earlier run passed full typecheck, lint, all nine test workspaces, 12 browser interactions and four themed VRT scenarios. It predates only the final no-op Undo fix.
 

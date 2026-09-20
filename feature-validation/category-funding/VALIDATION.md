@@ -1,6 +1,6 @@
 # Category funding validation
 
-Status: implementation committed on `category-funding`. The user reports CI has finished and will supply its results. The latest run outcome has not been retrieved, in accordance with the instruction to stop monitoring Actions.
+Status: implementation and required automated validation are complete on `category-funding`. The final Linux CI results were reviewed at the user's request and passed. Ready for code review.
 
 ## Behavior
 
@@ -44,7 +44,23 @@ Completed statuses show Updating during background reads. An available Fund butt
 
 ## Tests
 
-Final implementation: `1a8d3e0e4ac449598837b667af3c4861c2e2ce0e`. [Latest Linux run](https://github.com/mattm4444/actual-budget-category-feature/actions/runs/35529409043): result awaiting user review. Snapshot regeneration is disabled in this run. Workflow commit `76ba663a0` runs workspaces serially; application code is unchanged from `1a8d3e0e4`.
+Final implementation: `1a8d3e0e4ac449598837b667af3c4861c2e2ce0e`. [Latest Linux run](https://github.com/mattm4444/actual-budget-category-feature/actions/runs/35529409043): **passed**, verified from individual job steps and logs. Snapshot regeneration is disabled in this run. Workflow commit `76ba663a0` runs workspaces serially; application code is unchanged from `1a8d3e0e4`.
+
+Final Linux results:
+
+| Check                     | Result                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| Repository typecheck      | Passed, all 10 tasks                                                                |
+| Lint and formatting       | Passed; 659 warnings, zero errors                                                   |
+| Full unit suite           | All nine workspaces passed; 3383 tests passed, three skipped                        |
+| Funding-specific coverage | 27 engine and 17 component tests passed                                             |
+| Browser production build  | Passed                                                                              |
+| Browser interactions      | 12 passed, including eight existing budget regressions                              |
+| Visual regression         | Four scenarios passed against 51 committed Linux screenshots; regeneration disabled |
+
+The AQL timeouts did not recur when workspaces ran serially; assertions and timeout thresholds were unchanged. The optional AQL diagnostic, screenshot-generation step and additional upstream comparison were skipped as expected. There were no failed required steps.
+
+CI tested `76ba663a091f96d5ab290478a068954fc7afbe51`. Later closeout commits change documentation and evidence images only; application code matches the tested revision. The four evidence images below were captured in the earlier passing run, while the final run independently verified the committed visual baselines.
 
 Verified locally after the no-op Undo fix:
 
@@ -83,7 +99,7 @@ The first final-code Linux run, [35528520920](https://github.com/mattm4444/actua
 
 ## Evidence screenshots
 
-Captured and visually inspected from the synthetic Envelope demo in passing Linux run `35519077705`, before the no-op Undo fix. These images document the visible funding states; they do not claim final-code CI success.
+Captured and visually inspected from the synthetic Envelope demo in passing Linux run `35519077705`, before the no-op Undo fix. These images document the visible funding states. Final-code CI independently passed the committed baseline comparisons as recorded above.
 
 - [Underfunded](underfunded.png)
 - [Partially funded](partially-funded.png)
