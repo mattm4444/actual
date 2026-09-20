@@ -484,11 +484,11 @@ export async function fundCategory({
 }: {
   month: string;
   categoryId: CategoryEntity['id'];
-}): Promise<void> {
+}): Promise<boolean> {
   // Called inside mutator(undoable(...)): recompute from current server state
   // so stale UI data or repeated clicks can never reduce or double-fund a row.
   const result = await computeCategoryFunding(month, categoryId);
-  if (!result || result.funding.amountToFund <= 0) return;
+  if (!result || result.funding.amountToFund <= 0) return false;
   await batchMessages(async () => {
     await setBudget({
       month,
@@ -502,4 +502,5 @@ export async function fundCategory({
       long_goal: result.values.longGoal ? 1 : null,
     });
   });
+  return true;
 }

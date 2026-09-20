@@ -6,6 +6,10 @@ on:
         description: Also test the unmodified starting upstream revision
         type: boolean
         default: true
+      updateSnapshots:
+        description: Regenerate only category funding Linux screenshots
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -30,13 +34,12 @@ jobs:
       - run: corepack enable && yarn install --immutable
       - run: yarn typecheck
       - run: yarn lint
-        continue-on-error: true
       - run: yarn test
-        continue-on-error: true
       - run: yarn build:browser --skip-translations
       - name: Browser interactions
         run: yarn e2e category-funding.test.ts e2e/budget.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000
       - name: Generate only category funding screenshots
+        if: inputs.updateSnapshots
         run: yarn vrt category-funding.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000 --update-snapshots
       - name: Verify category funding screenshots
         run: yarn vrt category-funding.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000

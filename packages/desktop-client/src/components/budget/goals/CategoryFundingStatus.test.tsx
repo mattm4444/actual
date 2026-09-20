@@ -20,6 +20,10 @@ vi.mock(
   () => import('#mocks/connection'),
 );
 
+vi.mock('@actual-app/components/hooks/useResponsive', () => ({
+  useResponsive: () => ({ isNarrowWidth: true }),
+}));
+
 const category: CategoryEntity = {
   id: 'groceries',
   name: 'Groceries',
@@ -32,7 +36,9 @@ const category: CategoryEntity = {
 let funding: CategoryFunding | null;
 let client: ReturnType<typeof createTestQueryClient>;
 let store: ReturnType<typeof configureTestAppStore>;
-let fund: Mock<(args: { month: string; categoryId: string }) => Promise<void>>;
+let fund: Mock<
+  (args: { month: string; categoryId: string }) => Promise<boolean>
+>;
 let read: Mock<() => Promise<CategoryFunding | null>>;
 
 beforeEach(() => {
@@ -52,6 +58,7 @@ beforeEach(() => {
       remaining: 0,
       amountToFund: 0,
     };
+    return true;
   });
   read = vi.fn(async () => funding);
   initServer({
@@ -272,4 +279,30 @@ it('marks a completed status busy while recalculating instead of displaying a st
     await refreshing;
   });
   expect(await screen.findByText('Funded')).toBeInTheDocument();
+});
+
+it('does not offer Undo when a stale Fund request makes no change', async () => {
+  fund.mockResolvedValue(false);
+  const user = userEvent.setup();
+  renderStatus();
+  await user.click(
+    await screen.findByRole('button', { name: /Fund Groceries/ }),
+  );
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  expect(store.getState().notifications.notifications).toHaveLength(0);
+  expect(screen.getByText('650.00 needed')).toBeInTheDocument();
+});
+
+it('offers mobile Undo only after funding actually changed the budget', async () => {
+  const user = userEvent.setup();
+  renderStatus();
+  await user.click(
+    await screen.findByRole('button', { name: /Fund Groceries/ }),
+  );
+  await waitFor(() =>
+    expect(store.getState().notifications.notifications).toHaveLength(1),
+  );
+  expect(store.getState().notifications.notifications[0].button?.title).toBe(
+    'Undo',
+  );
 });

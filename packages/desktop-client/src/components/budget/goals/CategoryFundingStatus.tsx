@@ -73,13 +73,15 @@ function EnabledCategoryFundingStatus({
 
   async function fund() {
     try {
-      await mutateAsync({
+      const result = await mutateAsync({
         month,
         type: 'fund-category',
         args: { category: category.id },
       });
       await queryClient.invalidateQueries({ queryKey: fundingQueries.all() });
-      showUndoNotification({ message: t('Budget automation applied.') });
+      if (result && 'funded' in result && result.funded) {
+        showUndoNotification({ message: t('Budget automation applied.') });
+      }
     } catch {
       // useBudgetActions displays the normal budget mutation error notification.
     }

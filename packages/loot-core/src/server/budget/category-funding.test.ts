@@ -128,7 +128,7 @@ it.each([
 
 it('funds only this category to the absolute recommendation, and repeated clicks are no-ops', async () => {
   budgeted = 40000;
-  await fundCategory(request);
+  expect(await fundCategory(request)).toBe(true);
   expect(actions.setBudget).toHaveBeenCalledExactlyOnceWith({
     month: '2024-01',
     category: 'groceries',
@@ -138,7 +138,7 @@ it('funds only this category to the absolute recommendation, and repeated clicks
     remaining: 0,
     amountToFund: 0,
   });
-  await fundCategory(request);
+  expect(await fundCategory(request)).toBe(false);
   expect(actions.setBudget).toHaveBeenCalledTimes(1);
 });
 
