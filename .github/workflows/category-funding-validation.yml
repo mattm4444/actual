@@ -26,6 +26,7 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - run: corepack enable && yarn install --immutable
       - run: yarn typecheck
       - run: yarn lint
@@ -54,12 +55,13 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: 5a131c7c8
+          ref: 5a131c7c8821ab09a04d66226f06b616b9b2c605
           persist-credentials: false
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: 24
           package-manager-cache: false
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - run: corepack enable && yarn install --immutable
       - run: yarn lint
         continue-on-error: true
