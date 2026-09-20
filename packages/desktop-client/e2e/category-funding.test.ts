@@ -111,6 +111,49 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       await expect(status).toHaveText('Funded');
       await expect(fund).toHaveCount(0);
       await expect(row).toMatchThemeScreenshots();
+
+      // Navigation must use the new month's engine inputs, not a cached status.
+      await budget.goToNextMonth();
+      await budget.setBudgetedAmount('Food', '0');
+      await expect(status).toContainText('650.00 needed');
+      await row.getByTestId('category-name').hover();
+      await row
+        .getByRole('button', { name: 'Change category automations' })
+        .click();
+      await modal.locator('#amount-field').fill('700');
+      await modal.locator('#amount-field').press('Tab');
+      await modal.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(modal).toBeHidden();
+      await expect(status).toContainText('700.00 needed');
+
+      // The same saved automation and mutation work in the narrow mobile layout.
+      await page.setViewportSize({ width: 390, height: 844 });
+      const mobileRow = page.getByTestId('category-row').filter({
+        has: page
+          .getByTestId('category-name')
+          .getByText('Food', { exact: true }),
+      });
+      const mobileStatus = mobileRow.getByTestId('category-funding-status');
+      await expect(mobileStatus).toContainText('700.00 needed');
+      await expect(mobileRow).toMatchThemeScreenshots();
+      await mobileStatus
+        .getByRole('button', { name: /^Fund Food for / })
+        .click();
+      await expect(mobileStatus).toHaveText('Funded');
+      await expect(mobileRow).toMatchThemeScreenshots();
+
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await expect(status).toHaveText('Funded');
+      await row.getByTestId('category-name').hover();
+      await row
+        .getByRole('button', { name: 'Change category automations' })
+        .click();
+      await modal
+        .getByRole('button', { name: 'Delete automation', exact: true })
+        .click();
+      await modal.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(modal).toBeHidden();
+      await expect(row.getByTestId('category-funding-status')).toHaveCount(0);
     });
   });
 }

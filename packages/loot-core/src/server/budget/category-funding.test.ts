@@ -64,6 +64,7 @@ let templates: Template[];
 
 beforeEach(() => {
   vi.clearAllMocks();
+  category.is_income = false;
   budgeted = 0;
   available = 100000;
   rollover = 0;
@@ -395,4 +396,71 @@ it('reads note templates using the existing parser entry point without saving de
   ]);
   expect(await getCategoryFunding(request)).toMatchObject({ remaining: 65000 });
   expect(getCategoriesWithTemplates).toHaveBeenCalledWith([category.id]);
+});
+
+it('uses the periodic engine to distinguish an off-month from the next allocation', async () => {
+  templates = [
+    {
+      type: 'periodic',
+      amount: 650,
+      period: { period: 'month', amount: 2 },
+      starting: '2024-02-01',
+      priority: 0,
+      directive: 'template',
+    },
+  ];
+  expect(await getCategoryFunding(request)).toMatchObject({
+    recommended: 0,
+    remaining: 0,
+    amountToFund: 0,
+  });
+  await fundCategory(request);
+  expect(actions.setBudget).not.toHaveBeenCalled();
+  expect(
+    await getCategoryFunding({ ...request, month: '2024-02' }),
+  ).toMatchObject({ recommended: 65000, remaining: 65000 });
+});
+
+it('rechecks replaced and removed automations before a stale Fund request', async () => {
+  expect(await getCategoryFunding(request)).toMatchObject({ remaining: 65000 });
+  templates = [{ ...fixed, monthly: 200 }];
+  await fundCategory(request);
+  expect(budgeted).toBe(20000);
+  templates = [];
+  await fundCategory(request);
+  expect(actions.setBudget).toHaveBeenCalledTimes(1);
+  expect(await getCategoryFunding(request)).toBeNull();
+});
+
+it.each([false, true])(
+  'only allocates income in tracking mode (%s)',
+  async tracking => {
+    category.is_income = true;
+    vi.mocked(actions.isTrackingBudget).mockReturnValue(tracking);
+    const result = await getCategoryFunding(request);
+    if (tracking) expect(result).toMatchObject({ remaining: 65000 });
+    else expect(result).toBeNull();
+    await fundCategory(request);
+    expect(actions.setBudget).toHaveBeenCalledTimes(tracking ? 1 : 0);
+  },
+);
+
+it('rejects malformed non-finite engine amounts without writing a budget', async () => {
+  templates = [{ ...fixed, monthly: Number.NaN }];
+  // JSON serialization turns NaN into null; mimic corrupt saved input instead.
+  vi.mocked(aql.aqlQuery).mockImplementation(async query => ({
+    data: JSON.stringify(query).includes('categories')
+      ? [
+          {
+            ...category,
+            goal_def:
+              '[{"type":"simple","monthly":"invalid","priority":0,"directive":"template"}]',
+          },
+        ]
+      : [],
+    dependencies: [],
+  }));
+  await expect(getCategoryFunding(request)).rejects.toThrow();
+  await expect(fundCategory(request)).rejects.toThrow();
+  expect(actions.setBudget).not.toHaveBeenCalled();
 });

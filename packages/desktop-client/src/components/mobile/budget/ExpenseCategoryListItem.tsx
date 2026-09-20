@@ -14,6 +14,7 @@ import type { BudgetType } from '@actual-app/core/server/prefs';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type { CategoryEntity } from '@actual-app/core/types/models';
 
+import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { useCategoriesById } from '#hooks/useCategories';
 import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
@@ -454,6 +455,7 @@ export function ExpenseCategoryListItem({
           onShowActivity={onShowActivity}
         />
       </View>
+      <CategoryFundingStatus category={category} month={month} />
     </GridListItem>
   );
 }

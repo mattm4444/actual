@@ -12,6 +12,7 @@ import { View } from '@actual-app/components/view';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type { CategoryEntity } from '@actual-app/core/types/models';
 
+import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { useNavigate } from '#hooks/useNavigate';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { collapseModals, pushModal } from '#modals/modalsSlice';
@@ -272,6 +273,7 @@ export function IncomeCategoryListItem({
           }
         />
       </View>
+      <CategoryFundingStatus category={category} month={month} />
     </GridListItem>
   );
 }

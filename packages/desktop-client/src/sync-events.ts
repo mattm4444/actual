@@ -103,7 +103,12 @@ export function listenForSyncEvent(store: AppStore, queryClient: QueryClient) {
       }
 
       const tables = event.tables;
-      void queryClient.invalidateQueries({ queryKey: fundingQueries.all() });
+      // Empty sync successes contain no changed inputs. Notes, schedules,
+      // rules, preferences and transactions can all affect the engine, so
+      // retain broad invalidation for actual data changes.
+      if (tables.length > 0) {
+        void queryClient.invalidateQueries({ queryKey: fundingQueries.all() });
+      }
 
       if (tables.includes('prefs')) {
         void store.dispatch(loadPrefs());

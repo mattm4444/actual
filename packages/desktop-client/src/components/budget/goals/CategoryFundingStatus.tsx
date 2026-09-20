@@ -43,7 +43,11 @@ function EnabledCategoryFundingStatus({
   const notes = useNotes(category.id);
   const hasTemplates = !!category.goal_def || !!notes?.includes('#template');
   const queryClient = useQueryClient();
-  const { data: funding, isError } = useQuery({
+  const {
+    data: funding,
+    isError,
+    isFetching,
+  } = useQuery({
     ...fundingQueries.category(month, category.id),
     enabled: hasTemplates,
     retry: false,
@@ -85,6 +89,7 @@ function EnabledCategoryFundingStatus({
     <View
       data-testid="category-funding-status"
       aria-live="polite"
+      aria-busy={isFetching}
       onKeyDown={event => {
         // Fund owns its keyboard interaction even when a budget cell is editing.
         if (['Enter', ' ', 'Tab'].includes(event.key)) {
@@ -146,6 +151,14 @@ function EnabledCategoryFundingStatus({
             </Button>
           </Tooltip>
         </>
+      ) : isFetching ? (
+        <Text>
+          <Trans>Updating…</Trans>
+        </Text>
+      ) : funding && funding.recommended <= 0 ? (
+        <Text>
+          <Trans>No funding needed</Trans>
+        </Text>
       ) : (
         <>
           <SvgCheckmark aria-hidden="true" width={12} height={12} />

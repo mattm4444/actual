@@ -66,11 +66,11 @@ Refresh: fundingQueries is invalidated on applied/success sync events, undo even
 
 Feature-only check:
 
-~~~powershell
+```powershell
 $featureFiles = @(git diff --name-only 5a131c7c8 -- '*.ts' '*.tsx')
 corepack yarn oxfmt --check @featureFiles
 corepack yarn oxlint --type-aware --quiet @featureFiles
-~~~
+```
 
 Ignored local logs: .e2e-budget-regression.log, .funding-core-tests.log, .funding-ui-tests.log, .typecheck-funding.log, .lint-funding.log, .lint-changed-funding.log, .test-funding.log, .e2e-funding.log, .funding-dev-server.log, .funding-backend.log. These are local only, not pushed.
 
@@ -135,3 +135,11 @@ Avoid unnecessary concurrent heavy checks on this 12GB Windows host. Full tests 
 - Refill cap with prior-month balance: compare against existing automation preview/application. Spending after funding must follow engine behavior, not blindly refill spent money.
 - Check recurring schedule, save-by-date, future month, balance cap, priorities with insufficient available funds, and a category without automation.
 - Tab to Fund, activate with Enter/Space, verify category/month accessible name and disabled/pending/error behavior. Check narrow desktop width, multi-month layout, privacy mode, and all themes.
+
+## Continuation checkpoint (September 20)
+
+Work remains in progress pending Linux VRT and baseline comparison. The shared status now covers mobile expense/income and desktop tracking income, shows No funding needed for nonpositive engine recommendations, and marks background recalculation busy without disabling an available Fund control. Empty sync successes no longer trigger recomputation. Non-finite engine values fail closed. Standalone balance goals remain intentionally outside monthly funding because the engine assigns no monthly amount.
+
+Current continuation results: 142 targeted engine tests and 15 component tests pass; expanded Envelope/Tracking E2E flows pass (2 tests), covering month navigation, automation replacement/removal, and mobile funding. Repository typecheck passes. Full Windows test run failed (1193 core passed, one EEXIST failure from the leftover test-budget fixture; all 604 sync-server assertions passed but teardown failed EBUSY). Full lint reported 440 formatting files before final changed-file formatting; comparison pending. Changed TypeScript type-aware lint passes. Translation generation parsed 1255 files successfully; locale output is ignored by repository policy.
+
+A manually dispatched private-only workflow, category-funding-validation.yml, runs the required Linux Playwright container, creates only this feature's screenshots, reruns them without update, and uploads evidence. A separate baseline job checks unmodified upstream 5a131c7c8. It has no write permissions and creates no PR. A local isolated worktree at C:\Users\mattf\actual-funding-upstream-check is also being prepared to reproduce Windows-specific failures. Do not discard test-generated snapshots in the primary checkout.

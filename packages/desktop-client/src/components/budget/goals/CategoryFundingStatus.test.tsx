@@ -220,3 +220,56 @@ it('preserves keyboard focus while an edit triggers a background refresh', async
   });
   expect(button).toHaveFocus();
 });
+
+it('shows no funding needed for a zero engine recommendation instead of claiming completion', async () => {
+  funding = { budgeted: 0, recommended: 0, remaining: 0, amountToFund: 0 };
+  renderStatus();
+  expect(await screen.findByText('No funding needed')).toBeInTheDocument();
+  expect(screen.queryByText('Funded')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+
+it('removes the status when an automation is removed', async () => {
+  renderStatus();
+  await screen.findByText('650.00 needed');
+  funding = null;
+  await act(() => client.invalidateQueries({ queryKey: fundingQueries.all() }));
+  await waitFor(() =>
+    expect(
+      screen.queryByTestId('category-funding-status'),
+    ).not.toBeInTheDocument(),
+  );
+});
+
+it('marks a completed status busy while recalculating instead of displaying a stale check', async () => {
+  funding = {
+    budgeted: 65000,
+    recommended: 65000,
+    remaining: 0,
+    amountToFund: 0,
+  };
+  renderStatus();
+  await screen.findByText('Funded');
+  let finishRead: ((value: CategoryFunding | null) => void) | undefined;
+  read.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finishRead = resolve;
+      }),
+  );
+  let refreshing: Promise<void>;
+  act(() => {
+    refreshing = client.invalidateQueries({ queryKey: fundingQueries.all() });
+  });
+  expect(await screen.findByText('Updating…')).toBeInTheDocument();
+  expect(screen.getByTestId('category-funding-status')).toHaveAttribute(
+    'aria-busy',
+    'true',
+  );
+  expect(screen.queryByText('Funded')).not.toBeInTheDocument();
+  await act(async () => {
+    finishRead?.(funding);
+    await refreshing;
+  });
+  expect(await screen.findByText('Funded')).toBeInTheDocument();
+});

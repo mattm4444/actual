@@ -441,6 +441,9 @@ async function computeCategoryFunding(month: string, categoryId: string) {
     monthUtils.sheetForMonth(month),
     'budget-' + categoryId,
   );
+  if (!Number.isFinite(values.budgeted) || !Number.isFinite(budgeted)) {
+    throw new Error('Invalid budget automation amount');
+  }
   const remaining = Math.max(0, values.budgeted - budgeted);
   // Apply uses available-funds/priority clamping. Never bypass that using the
   // unconstrained projection, or silently pull money out of an overfunded row.
@@ -449,6 +452,9 @@ async function computeCategoryFunding(month: string, categoryId: string) {
     const applicable = await computeTemplates(month, true, input, [category]);
     if (applicable.errors.length) throw new Error(applicable.errors.join('\n'));
     const amount = applicable.contexts[0]?.getValues().budgeted ?? budgeted;
+    if (!Number.isFinite(amount)) {
+      throw new Error('Invalid budget automation amount');
+    }
     amountToFund = Math.max(0, Math.min(values.budgeted, amount) - budgeted);
   }
   return {
