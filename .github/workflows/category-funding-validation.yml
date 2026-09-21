@@ -1,0 +1,81 @@
+name: Category funding validation
+on:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Also test the unmodified starting upstream revision
+        type: boolean
+        default: true
+      updateSnapshots:
+        description: Regenerate only category funding Linux screenshots
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  feature:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.61.1-jammy
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      E2E_USE_BUILD: '1'
+      E2E_WORKERS: '1'
+      REACT_APP_NETLIFY: 'true'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: corepack enable && yarn install --immutable
+      - run: yarn typecheck
+      - run: yarn lint
+      - run: yarn test
+        id: unit-tests
+        env:
+          LAGE_POOL_CONCURRENCY: '1'
+      - name: Diagnose AQL timeouts in isolation
+        if: failure() && steps.unit-tests.outcome == 'failure'
+        run: yarn workspace @actual-app/core test:node src/server/aql/schema/executors.test.ts --maxWorkers=1
+      - run: yarn build:browser --skip-translations
+        id: browser-build
+        if: ${{ !cancelled() }}
+      - name: Browser interactions
+        if: ${{ !cancelled() && steps.browser-build.outcome == 'success' }}
+        run: yarn e2e category-funding.test.ts e2e/budget.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000
+      - name: Generate only category funding screenshots
+        if: ${{ !cancelled() && inputs.updateSnapshots && steps.browser-build.outcome == 'success' }}
+        run: yarn vrt category-funding.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000 --update-snapshots
+      - name: Verify category funding screenshots
+        if: ${{ !cancelled() && steps.browser-build.outcome == 'success' }}
+        run: yarn vrt category-funding.test.ts --workers=1 --reporter=list --retries=0 --timeout=120000
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: category-funding-linux
+          path: |
+            packages/desktop-client/e2e/category-funding.test.ts-snapshots/
+            packages/desktop-client/test-results/
+          retention-days: 14
+  upstream:
+    if: inputs.baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 5a131c7c8821ab09a04d66226f06b616b9b2c605
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: corepack enable && yarn install --immutable
+      - run: yarn lint
+        continue-on-error: true
+      - run: yarn test
