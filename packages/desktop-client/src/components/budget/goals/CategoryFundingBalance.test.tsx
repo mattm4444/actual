@@ -59,7 +59,9 @@ beforeEach(() => {
   store.dispatch(mergeSyncedPrefs({ 'flags.goalTemplatesEnabled': 'true' }));
   read.mockReset().mockImplementation(async () => funding);
   initServer({
-    'budget/category-funding': read,
+    'budget/monthly-category-funding': async () => ({
+      [category.id]: { funding: await read() },
+    }),
     query: async () => ({ data: [], dependencies: [] }),
   });
 });

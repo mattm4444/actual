@@ -63,7 +63,9 @@ beforeEach(() => {
   });
   read = vi.fn(async () => funding);
   initServer({
-    'budget/category-funding': read,
+    'budget/monthly-category-funding': async () => ({
+      [category.id]: { funding: await read() },
+    }),
     'budget/fund-category': fund,
     query: async () => ({ data: [], dependencies: [] }),
   });

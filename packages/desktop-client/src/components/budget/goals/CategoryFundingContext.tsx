@@ -42,7 +42,8 @@ function EnabledCategoryFundingProvider({
   const notes = useNotes(category.id);
   const hasTemplates = !!category.goal_def || !!notes?.includes('#template');
   const { data, isError, isFetching } = useQuery({
-    ...fundingQueries.category(month, category.id),
+    ...fundingQueries.month(month),
+    select: results => results[category.id],
     enabled: hasTemplates,
     retry: false,
   });
@@ -51,7 +52,13 @@ function EnabledCategoryFundingProvider({
     <CategoryFundingContext.Provider
       value={
         hasTemplates
-          ? { category, month, funding: data, isError, isFetching }
+          ? {
+              category,
+              month,
+              funding: data?.funding,
+              isError: isError || !!data?.error,
+              isFetching,
+            }
           : null
       }
     >

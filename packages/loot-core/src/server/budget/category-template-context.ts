@@ -30,6 +30,30 @@ import {
 import { runSchedule } from './schedule-template';
 import { getActiveSchedules } from './statements';
 
+export type TemplatePreferences = {
+  currencyCode: string;
+  hideFraction: boolean;
+  isTracking: boolean;
+};
+
+export async function getTemplatePreferences(): Promise<TemplatePreferences> {
+  const hideDecimal = await aqlQuery(
+    q('preferences').filter({ id: 'hideFraction' }).select('*'),
+  );
+  const currencyPref = await aqlQuery(
+    q('preferences').filter({ id: 'defaultCurrencyCode' }).select('*'),
+  );
+  return {
+    isTracking: isTrackingBudget(),
+    currencyCode:
+      currencyPref.data.length > 0 ? currencyPref.data[0].value : '',
+    hideFraction:
+      hideDecimal.data.length > 0
+        ? hideDecimal.data[0].value === 'true'
+        : false,
+  };
+}
+
 export class CategoryTemplateContext {
   /*----------------------------------------------------------------------------
    * Using This Class:
@@ -56,6 +80,7 @@ export class CategoryTemplateContext {
     month: string,
     budgeted: number,
     skipAvailableClamp: boolean = false,
+    preferences?: TemplatePreferences,
   ) {
     // Saved/synced goal_def JSON bypasses the note grammar.
     for (const template of templates) {
@@ -80,7 +105,7 @@ export class CategoryTemplateContext {
     if (
       (fromLastMonth < 0 && !carryover) || // overspend no carryover
       category.is_income || // tracking budget income categories
-      (isTrackingBudget() && !carryover) // tracking budget regular categories
+      ((preferences?.isTracking ?? isTrackingBudget()) && !carryover) // tracking budget regular categories
     ) {
       fromLastMonth = 0;
     }
@@ -89,15 +114,8 @@ export class CategoryTemplateContext {
     await CategoryTemplateContext.checkByAndScheduleAndSpend(templates, month);
     await CategoryTemplateContext.checkPercentage(templates);
 
-    const hideDecimal = await aqlQuery(
-      q('preferences').filter({ id: 'hideFraction' }).select('*'),
-    );
-
-    const currencyPref = await aqlQuery(
-      q('preferences').filter({ id: 'defaultCurrencyCode' }).select('*'),
-    );
-    const currencyCode =
-      currencyPref.data.length > 0 ? currencyPref.data[0].value : '';
+    const { currencyCode, hideFraction } =
+      preferences ?? (await getTemplatePreferences());
 
     // call the private constructor
     return new CategoryTemplateContext(
@@ -107,9 +125,7 @@ export class CategoryTemplateContext {
       fromLastMonth,
       budgeted,
       currencyCode,
-      hideDecimal.data.length > 0
-        ? hideDecimal.data[0].value === 'true'
-        : false,
+      hideFraction,
       skipAvailableClamp,
     );
   }

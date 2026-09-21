@@ -7,7 +7,7 @@ import { accountGroupQueries } from './account-groups';
 import { accountQueries } from './accounts';
 import { resetSync, sync } from './app/appSlice';
 import { categoryQueries } from './budget';
-import { fundingQueries } from './budget/queries';
+import { invalidateFundingQueries } from './budget/queries';
 import {
   closeAndDownloadBudget,
   uploadBudget,
@@ -107,7 +107,7 @@ export function listenForSyncEvent(store: AppStore, queryClient: QueryClient) {
       // rules, preferences and transactions can all affect the engine, so
       // retain broad invalidation for actual data changes.
       if (tables.length > 0) {
-        void queryClient.invalidateQueries({ queryKey: fundingQueries.all() });
+        void invalidateFundingQueries(queryClient);
       }
 
       if (tables.includes('prefs')) {
