@@ -1,20 +1,27 @@
 # Category funding validation
 
-Status: the September 20 badge and explicit-Fund revision is implemented on `category-funding`. Local validation is recorded below. Earlier Linux results in this document validate the previous UI and priority-clamped Fund behavior; they do not validate this revision. New Linux screenshot baselines must be generated in the pinned Playwright container. Review destination: [mattm4444/actual:category-funding](https://github.com/mattm4444/actual/tree/category-funding).
+Status: the live balance badges and explicit overbudgeting revision at `cd40d2723682b08778680e6547bd6c3dd27484d8` passed [Linux run 35550556635](https://github.com/mattm4444/actual/actions/runs/35550556635). The subsequent compact mobile revision has passed local type checking, changed-file lint and all four category-funding browser scenarios. Linux screenshots must be regenerated for the compact mobile rows before upstream review is marked ready.
 
 ## Behavior
 
-With Goal templates enabled, allocating budget automations show their engine-derived monthly shortfall and a keyboard-accessible Fund button. An explicit Fund click adds the full remaining recommendation to one category, even when available funds are insufficient, zero or negative; the overbudgeted total increases accordingly. Positive recommendations show Funded when met; zero/negative recommendations show No funding needed. Extra allocations are preserved. The same control covers desktop and mobile expense rows and tracking-income rows. Envelope income stays excluded by the engine.
+With Goal templates enabled, allocating budget automations show their engine-derived monthly shortfall and a keyboard-accessible Fund button. An explicit Fund click adds the full remaining recommendation to one category, even when available funds are insufficient, zero or negative; the overbudgeted total increases accordingly. Positive recommendations show Funded when met; zero/negative recommendations show No funding needed. Extra allocations are preserved. The Fund control is available on desktop expense and tracking-income rows. Mobile shows funding status inside the balance badge, with no separate Fund button or status line. Envelope income stays excluded by the engine.
 
 The existing CategoryTemplateContext / computeTemplates pipeline remains the only financial engine. Projection uses the same force/skipAvailableClamp mode as dryRunCategoryTemplate; the explicit Fund increment uses that projection. Normal Apply and bulk automation retain their existing available-funds/priority clamping. setBudget and setGoal run inside batchMessages and the existing mutator(undoable(...)) wrapper. Existing Apply Automation still retains its overwrite behavior.
 
 Standalone #goal, cleanup-only, and limit-only definitions do not prescribe a monthly allocation and intentionally receive no invented Fund amount. The existing goal/balance indicator remains available. Expired save-by or malformed automations fail closed with Automation unavailable.
 
+## Compact mobile revision
+
+- Removed the separate funding detail from mobile expense and tracking-income rows; desktop Fund and its full-shortfall allocation behavior remain available.
+- Category names use a single line, preserving normal category editing and balance actions.
+- Local production build, repository typecheck, changed-file type-aware lint, and all four category-funding browser scenarios passed. Browser assertions cover 320px and 390px rows, absence of Fund/status lines, row height, and live underfunded/funded labels. Light, dark and midnight captures were visually inspected.
+- Prior Linux run passed typecheck, lint, all workspaces, browser interactions, screenshot generation and screenshot verification. That run predates this mobile refinement.
+
 ## September 20 badge and explicit-Fund revision
 
 - A shared category/month funding query supplies both balance badges and the funding detail; displaying status never writes a saved goal or applies a template.
 - Yellow/clock means underfunded; green/check means funded; negative balances take red/overspent precedence. Loading, unavailable and no-demand statuses are neutral. Standalone balance goals retain their existing indicators.
-- Desktop rows stay compact until hovered or keyboard-focused. Mobile details remain directly reachable, with a 40px Fund target and full visible balance amounts.
+- Desktop rows stay compact until hovered or keyboard-focused. Mobile rows remain 50px high with the category name and amounts on one line. Long names truncate; funding state stays in the balance badge and its accessible label.
 - Local checks: 145 engine tests (including 30 category-funding regressions) and 23 component tests passed; repository typecheck and changed-file type-aware lint passed. All 12 browser scenarios passed, including ordinary budget navigation and transfers. Desktop/mobile screenshots were inspected in light, dark and midnight.
 - The local screenshots in `badge-revision/` are synthetic demo evidence, not replacement Linux VRT goldens. The old screenshots below document the earlier UI.
 

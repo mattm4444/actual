@@ -15,7 +15,6 @@ import * as monthUtils from '@actual-app/core/shared/months';
 import type { CategoryEntity } from '@actual-app/core/types/models';
 
 import { CategoryFundingProvider } from '#components/budget/goals/CategoryFundingContext';
-import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { useCategoriesById } from '#hooks/useCategories';
 import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
@@ -82,7 +81,7 @@ function ExpenseCategoryName({
         >
           <Text
             style={{
-              ...styles.lineClamp(2),
+              ...styles.lineClamp(1),
               width: sidebarColumnWidth,
               textAlign: 'left',
               ...styles.smallText,
@@ -457,7 +456,6 @@ export function ExpenseCategoryListItem({
             onShowActivity={onShowActivity}
           />
         </View>
-        <CategoryFundingStatus />
       </CategoryFundingProvider>
     </GridListItem>
   );

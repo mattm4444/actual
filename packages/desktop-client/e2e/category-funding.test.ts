@@ -22,6 +22,21 @@ async function captureThemeEvidence(target: Locator, name: string) {
   await page.evaluate(() => window.Actual.setTheme('auto'));
 }
 
+async function expectCompactMobileRow(row: Locator) {
+  await expect(row.getByTestId('category-funding-status')).toHaveCount(0);
+  await expect(row.getByRole('button', { name: /^Fund / })).toHaveCount(0);
+  await expect(row).toHaveCSS('height', '50px');
+  await expect(row.getByTestId('category-name')).toHaveCSS(
+    '-webkit-line-clamp',
+    '1',
+  );
+  const box = await row.boundingBox();
+  const viewport = row.page().viewportSize();
+  if (!box || !viewport)
+    {throw new Error('Mobile row must have a visible layout');}
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+}
+
 for (const budgetType of ['Envelope', 'Tracking'] as const) {
   test.describe('Category funding - ' + budgetType, () => {
     let page: Page;
@@ -162,24 +177,34 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       await expect(modal).toBeHidden();
       await expect(status).toContainText('700.00 needed');
 
-      // The same saved automation and mutation work in the narrow mobile layout.
+      // Mobile keeps live status in the balance badge without a second row.
       await page.setViewportSize({ width: 390, height: 844 });
       const mobileRow = page.getByTestId('category-row').filter({
         has: page
           .getByTestId('category-name')
           .getByText('Food', { exact: true }),
       });
-      const mobileStatus = mobileRow.getByTestId('category-funding-status');
-      await expect(mobileStatus).toContainText('700.00 needed');
+      await expectCompactMobileRow(mobileRow);
+      await expect(
+        mobileRow.getByRole('button', { name: /Underfunded$/ }),
+      ).toBeVisible();
+      await page.setViewportSize({ width: 320, height: 844 });
+      await expectCompactMobileRow(mobileRow);
+      await page.setViewportSize({ width: 390, height: 844 });
       await captureThemeEvidence(mobileRow, 'mobile-underfunded');
       await mobileRow.screenshot({
         path: testInfo.outputPath('mobile-underfunded.png'),
       });
       await expect(mobileRow).toMatchThemeScreenshots();
-      await mobileStatus
-        .getByRole('button', { name: /^Fund Food for / })
-        .click();
-      await expect(mobileStatus).toHaveText('Funded');
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await row.hover();
+      await fund.click();
+      await expect(status).toHaveText('Funded');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expectCompactMobileRow(mobileRow);
+      await expect(
+        mobileRow.getByRole('button', { name: /: Funded$/ }),
+      ).toBeVisible();
       await captureThemeEvidence(mobileRow, 'mobile-funded');
       await mobileRow.screenshot({
         path: testInfo.outputPath('mobile-funded.png'),
@@ -256,7 +281,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
     }
 
     if (budgetType === 'Tracking') {
-      test('funds tracking income on desktop and mobile', async () => {
+      test('funds tracking income on desktop and shows compact mobile status', async () => {
         const row = budget.budgetTable.getByTestId('row').filter({
           has: page
             .getByTestId('category-name')
@@ -295,13 +320,20 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
             .getByTestId('category-name')
             .getByText('Income', { exact: true }),
         });
-        const mobileStatus = mobileRow.getByTestId('category-funding-status');
-        await expect(mobileStatus).toContainText('800.00 needed');
+        await expectCompactMobileRow(mobileRow);
+        await expect(
+          mobileRow.getByRole('button', { name: /Underfunded$/ }),
+        ).toBeVisible();
         await expect(mobileRow).toMatchThemeScreenshots();
-        await mobileStatus
-          .getByRole('button', { name: /^Fund Income for / })
-          .click();
-        await expect(mobileStatus).toHaveText('Funded');
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await row.hover();
+        await status.getByRole('button', { name: /^Fund Income for / }).click();
+        await expect(status).toHaveText('Funded');
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expectCompactMobileRow(mobileRow);
+        await expect(
+          mobileRow.getByRole('button', { name: /: Funded$/ }),
+        ).toBeVisible();
         await expect(mobileRow).toMatchThemeScreenshots();
       });
     }

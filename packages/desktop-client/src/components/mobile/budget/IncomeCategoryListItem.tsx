@@ -13,7 +13,6 @@ import * as monthUtils from '@actual-app/core/shared/months';
 import type { CategoryEntity } from '@actual-app/core/types/models';
 
 import { CategoryFundingProvider } from '#components/budget/goals/CategoryFundingContext';
-import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { useNavigate } from '#hooks/useNavigate';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { collapseModals, pushModal } from '#modals/modalsSlice';
@@ -70,7 +69,7 @@ function IncomeCategoryName({ category, onEdit }: IncomeCategoryNameProps) {
         >
           <Text
             style={{
-              ...styles.lineClamp(2),
+              ...styles.lineClamp(1),
               width: sidebarColumnWidth,
               textAlign: 'left',
               ...styles.smallText,
@@ -275,7 +274,6 @@ export function IncomeCategoryListItem({
             }
           />
         </View>
-        <CategoryFundingStatus />
       </CategoryFundingProvider>
     </GridListItem>
   );
