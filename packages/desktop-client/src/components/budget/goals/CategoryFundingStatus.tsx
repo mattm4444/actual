@@ -1,6 +1,7 @@
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { SvgCheckmark } from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
@@ -8,68 +9,41 @@ import { theme } from '@actual-app/components/theme';
 import { Tooltip } from '@actual-app/components/tooltip';
 import { View } from '@actual-app/components/view';
 import * as monthUtils from '@actual-app/core/shared/months';
-import type { CategoryEntity } from '@actual-app/core/types/models';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useBudgetActions } from '#budget/mutations';
 import { fundingQueries } from '#budget/queries';
 import { PrivacyFilter } from '#components/PrivacyFilter';
-import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
-import { useNotes } from '#hooks/useNotes';
 import { useUndo } from '#hooks/useUndo';
 
-export function CategoryFundingStatus({
-  category,
-  month,
-}: {
-  category: CategoryEntity;
-  month: string;
-}) {
-  const isEnabled = useFeatureFlag('goalTemplatesEnabled');
-  if (!isEnabled) return null;
-  return <EnabledCategoryFundingStatus category={category} month={month} />;
+import { useCategoryFunding } from './CategoryFundingContext';
+
+export function CategoryFundingStatus() {
+  const state = useCategoryFunding();
+  if (!state) return null;
+  return <EnabledCategoryFundingStatus />;
 }
 
-function EnabledCategoryFundingStatus({
-  category,
-  month,
-}: {
-  category: CategoryEntity;
-  month: string;
-}) {
+function EnabledCategoryFundingStatus() {
   const { t } = useTranslation();
   const format = useFormat();
-  const notes = useNotes(category.id);
-  const hasTemplates = !!category.goal_def || !!notes?.includes('#template');
+  const { isNarrowWidth } = useResponsive();
+  const state = useCategoryFunding();
   const queryClient = useQueryClient();
-  const {
-    data: funding,
-    isError,
-    isFetching,
-  } = useQuery({
-    ...fundingQueries.category(month, category.id),
-    enabled: hasTemplates,
-    retry: false,
-  });
   const { mutateAsync, isPending } = useBudgetActions();
   const { showUndoNotification } = useUndo();
-  if (!hasTemplates || (!funding && !isError)) return null;
+  if (!state) return null;
+  const { category, month, funding, isError, isFetching } = state;
+  if (!funding && !isError) return null;
 
   const remaining = funding?.remaining ?? 0;
   const canFund = (funding?.amountToFund ?? 0) > 0;
   const amount = format(remaining, 'financial');
   const monthLabel = monthUtils.format(month, 'MMMM yyyy');
-  const explanation = !canFund
-    ? t("No funds are available for this automation's priority.")
-    : funding && funding.amountToFund < remaining
-      ? t(
-          'Available funds allow {{amount}} to be added now. The rest will remain needed.',
-          {
-            amount: format(funding.amountToFund, 'financial'),
-          },
-        )
-      : t('Fund this category using its budget automation.');
+  const explanation = t(
+    'Add the full amount needed to this category. This can increase the overbudgeted amount.',
+  );
 
   async function fund() {
     try {
@@ -99,7 +73,7 @@ function EnabledCategoryFundingStatus({
         }
       }}
       style={{
-        minHeight: 24,
+        minHeight: isNarrowWidth ? 40 : 28,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'flex-end',
@@ -112,8 +86,8 @@ function EnabledCategoryFundingStatus({
         color: isError
           ? theme.pageTextLight
           : remaining > 0
-            ? theme.templateNumberUnderFunded
-            : theme.budgetNumberPositive,
+            ? theme.warningTextDark
+            : theme.noticeText,
         borderBottom: '1px solid ' + theme.tableBorder,
       }}
     >
@@ -144,7 +118,8 @@ function EnabledCategoryFundingStatus({
                 void fund();
               }}
               style={{
-                padding: '2px 5px',
+                padding: '2px 8px',
+                minHeight: isNarrowWidth ? 40 : 24,
                 fontSize: 12,
                 color: theme.buttonNormalText,
               }}

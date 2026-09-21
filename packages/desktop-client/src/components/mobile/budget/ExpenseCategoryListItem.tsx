@@ -14,6 +14,7 @@ import type { BudgetType } from '@actual-app/core/server/prefs';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type { CategoryEntity } from '@actual-app/core/types/models';
 
+import { CategoryFundingProvider } from '#components/budget/goals/CategoryFundingContext';
 import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { useCategoriesById } from '#hooks/useCategories';
 import { useFormat } from '#hooks/useFormat';
@@ -423,39 +424,41 @@ export function ExpenseCategoryListItem({
       data-testid="category-row"
       {...props}
     >
-      <View
-        style={{
-          height: ROW_HEIGHT,
-          borderColor: theme.tableBorder,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingLeft: 5,
-          paddingRight: 5,
-          borderBottomWidth: 1,
-          opacity: isHidden ? 0.5 : undefined,
-          backgroundColor: monthUtils.isCurrentMonth(month)
-            ? theme.budgetCurrentMonth
-            : theme.budgetOtherMonth,
-        }}
-      >
-        <ExpenseCategoryName
-          category={category}
-          onEditCategory={onEditCategory}
-          show3Columns={show3Columns}
-        />
-        <ExpenseCategoryCells
-          key={`${category.id}-${show3Columns}-${showBudgetedColumn}`}
-          category={category}
-          month={month}
-          onBudgetAction={onBudgetAction}
-          show3Columns={show3Columns}
-          showBudgetedColumn={showBudgetedColumn}
-          onOpenBalanceMenu={onOpenBalanceMenu}
-          onShowActivity={onShowActivity}
-        />
-      </View>
-      <CategoryFundingStatus category={category} month={month} />
+      <CategoryFundingProvider category={category} month={month}>
+        <View
+          style={{
+            height: ROW_HEIGHT,
+            borderColor: theme.tableBorder,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingLeft: 5,
+            paddingRight: 5,
+            borderBottomWidth: 1,
+            opacity: isHidden ? 0.5 : undefined,
+            backgroundColor: monthUtils.isCurrentMonth(month)
+              ? theme.budgetCurrentMonth
+              : theme.budgetOtherMonth,
+          }}
+        >
+          <ExpenseCategoryName
+            category={category}
+            onEditCategory={onEditCategory}
+            show3Columns={show3Columns}
+          />
+          <ExpenseCategoryCells
+            key={`${category.id}-${show3Columns}-${showBudgetedColumn}`}
+            category={category}
+            month={month}
+            onBudgetAction={onBudgetAction}
+            show3Columns={show3Columns}
+            showBudgetedColumn={showBudgetedColumn}
+            onOpenBalanceMenu={onOpenBalanceMenu}
+            onShowActivity={onShowActivity}
+          />
+        </View>
+        <CategoryFundingStatus />
+      </CategoryFundingProvider>
     </GridListItem>
   );
 }

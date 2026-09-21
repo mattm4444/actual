@@ -4,11 +4,19 @@ import type {
   ComponentPropsWithoutRef,
   ComponentType,
   CSSProperties,
+  ReactNode,
 } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { useResponsive } from '@actual-app/components/hooks/useResponsive';
-import { SvgArrowThinRight } from '@actual-app/components/icons/v1';
+import {
+  SvgArrowThinRight,
+  SvgCheckmark,
+  SvgDotsHorizontalTriple,
+  SvgExclamationOutline,
+  SvgSubtract,
+  SvgTime,
+} from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { theme } from '@actual-app/components/theme';
 import { Tooltip } from '@actual-app/components/tooltip';
@@ -16,12 +24,14 @@ import { View } from '@actual-app/components/view';
 import type { TransObjectLiteral } from '@actual-app/core/types/util';
 import { css } from '@emotion/css';
 
+import { PrivacyFilter } from '#components/PrivacyFilter';
 import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
 import { useSheetValue } from '#hooks/useSheetValue';
 import type { Binding } from '#spreadsheet';
 
+import { useCategoryFunding } from './goals/CategoryFundingContext';
 import { makeBalanceAmountStyle } from './util';
 
 type CarryoverIndicatorProps = {
@@ -71,6 +81,9 @@ type CellValueChildren = ComponentPropsWithoutRef<typeof CellValue>['children'];
 type ChildrenWithClassName = (
   props: Parameters<CellValueChildren>[0] & {
     className: string;
+    statusIcon?: ReactNode;
+    statusLabel?: string;
+    badgeStyle?: CSSProperties;
   },
 ) => ReturnType<CellValueChildren>;
 
@@ -127,6 +140,84 @@ export function BalanceWithCarryover({
     [budgetedValue, goalValue, isGoalTemplatesEnabled, longGoalValue],
   );
   const format = useFormat();
+  const fundingState = useCategoryFunding();
+  const hasFunding =
+    fundingState && (fundingState.funding || fundingState.isError);
+
+  function getFundingState(balanceValue: number) {
+    if (!hasFunding) return null;
+    if (balanceValue < 0) return 'overspent';
+    if (fundingState.isError) return 'unavailable';
+    if (fundingState.isFetching) return 'updating';
+    if (fundingState.funding.remaining > 0) return 'underfunded';
+    return fundingState.funding.recommended > 0 ? 'funded' : 'not-needed';
+  }
+
+  function getFundingLabel(balanceValue: number) {
+    const state = getFundingState(balanceValue);
+    if (state === 'overspent') return t('Overspent');
+    if (state === 'unavailable') return t('Automation unavailable');
+    if (state === 'updating') return t('Updating…');
+    if (state === 'underfunded') return t('Underfunded');
+    if (state === 'funded') return t('Funded');
+    if (state === 'not-needed') return t('No funding needed');
+    return undefined;
+  }
+
+  function getStatusIcon(balanceValue: number) {
+    const state = getFundingState(balanceValue);
+    if (!state) return undefined;
+    const Icon =
+      state === 'funded'
+        ? SvgCheckmark
+        : state === 'underfunded'
+          ? SvgTime
+          : state === 'updating'
+            ? SvgDotsHorizontalTriple
+            : state === 'not-needed'
+              ? SvgSubtract
+              : SvgExclamationOutline;
+    return (
+      <Icon
+        aria-hidden="true"
+        width={12}
+        height={12}
+        style={{ flexShrink: 0 }}
+      />
+    );
+  }
+
+  function getBadgeStyle(balanceValue: number): CSSProperties {
+    const state = getFundingState(balanceValue);
+    if (!state) return {};
+    const colors =
+      state === 'overspent'
+        ? {
+            backgroundColor: theme.errorBackground,
+            color: theme.errorTextDarker,
+          }
+        : state === 'underfunded'
+          ? {
+              backgroundColor: theme.warningBackground,
+              color: theme.warningTextDark,
+            }
+          : state === 'funded'
+            ? {
+                backgroundColor: theme.noticeBackground,
+                color: theme.noticeTextDark,
+              }
+            : { backgroundColor: theme.pillBackground, color: theme.pillText };
+    return {
+      ...colors,
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      borderRadius: 12,
+      padding: '2px 7px',
+      maxWidth: '100%',
+      lineHeight: '18px',
+    };
+  }
 
   const getDifferenceToGoal = useCallback(
     (balanceValue: number) =>
@@ -136,20 +227,18 @@ export function BalanceWithCarryover({
     [budgetedValue, goalValue, longGoalValue],
   );
 
-  const getDefaultClassName = useCallback(
-    (balanceValue: number) =>
-      css({
-        ...getBalanceAmountStyle(balanceValue),
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        textAlign: 'right',
-        ...(!isDisabled && {
-          cursor: 'pointer',
-        }),
-        ':hover': { textDecoration: 'underline' },
+  const getDefaultClassName = (balanceValue: number) =>
+    css({
+      ...getBalanceAmountStyle(balanceValue),
+      ...getBadgeStyle(balanceValue),
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      textAlign: 'right',
+      ...(!isDisabled && {
+        cursor: 'pointer',
       }),
-    [getBalanceAmountStyle, isDisabled],
-  );
+      ':hover': { textDecoration: 'underline' },
+    });
   const GoalStatusDisplay = useCallback(
     (balanceValue, type) => {
       return (
@@ -249,7 +338,11 @@ export function BalanceWithCarryover({
           <Tooltip
             content={
               <View style={{ padding: 10 }}>
-                {GoalStatusDisplay(balanceValue, type)}
+                {hasFunding ? (
+                  <PrivacyFilter>{getFundingLabel(balanceValue)}</PrivacyFilter>
+                ) : (
+                  GoalStatusDisplay(balanceValue, type)
+                )}
               </View>
             }
             style={{ ...styles.tooltip, borderRadius: '0px 5px 5px 0px' }}
@@ -258,7 +351,7 @@ export function BalanceWithCarryover({
               delay: 750,
               isDisabled:
                 !isGoalTemplatesEnabled ||
-                goalValue == null ||
+                (!hasFunding && goalValue == null) ||
                 isNarrowWidth ||
                 tooltipDisabled,
             }}
@@ -268,15 +361,29 @@ export function BalanceWithCarryover({
                 type,
                 name,
                 value: balanceValue,
-                className: getDefaultClassName(balanceValue),
+                className: hasFunding
+                  ? css({ color: getBadgeStyle(balanceValue).color })
+                  : getDefaultClassName(balanceValue),
+                ...(hasFunding && {
+                  badgeStyle: getBadgeStyle(balanceValue),
+                  statusIcon: getStatusIcon(balanceValue),
+                  statusLabel: getFundingLabel(balanceValue),
+                }),
               })
             ) : (
-              <CellValueText
-                type={type}
-                name={name}
-                value={balanceValue}
+              <span
                 className={getDefaultClassName(balanceValue)}
-              />
+                data-funding-state={getFundingState(balanceValue) ?? undefined}
+                aria-busy={hasFunding ? fundingState.isFetching : undefined}
+              >
+                {getStatusIcon(balanceValue)}
+                {hasFunding && (
+                  <span className={css(styles.visuallyHidden)}>
+                    {getFundingLabel(balanceValue)}:{' '}
+                  </span>
+                )}
+                <CellValueText type={type} name={name} value={balanceValue} />
+              </span>
             )}
           </Tooltip>
 

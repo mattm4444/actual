@@ -13,6 +13,7 @@ import {
 } from '#mocks';
 import { mergeSyncedPrefs } from '#prefs/prefsSlice';
 
+import { CategoryFundingProvider } from './CategoryFundingContext';
 import { CategoryFundingStatus } from './CategoryFundingStatus';
 
 vi.mock(
@@ -71,7 +72,9 @@ beforeEach(() => {
 function renderStatus(cat = category) {
   return render(
     <TestProviders queryClient={client} store={store}>
-      <CategoryFundingStatus category={cat} month="2024-01" />
+      <CategoryFundingProvider category={cat} month="2024-01">
+        <CategoryFundingStatus />
+      </CategoryFundingProvider>
     </TestProviders>,
   );
 }
@@ -151,16 +154,16 @@ it('does not add funding UI or calculate a recommendation for a category without
   expect(read).not.toHaveBeenCalled();
 });
 
-it('keeps an underfunded priority visible but disables funding when there are no available funds', async () => {
+it('allows an explicit Fund action for the full recommendation with no available funds', async () => {
   funding = {
     budgeted: 40000,
     recommended: 65000,
     remaining: 25000,
-    amountToFund: 0,
+    amountToFund: 25000,
   };
   renderStatus();
   expect(await screen.findByText('250.00 needed')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Fund Groceries/ })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Fund Groceries/ })).toBeEnabled();
 });
 
 it('shows an unavailable state when the engine cannot calculate, never a funded check', async () => {
@@ -191,7 +194,9 @@ it('keeps Fund keyboard activation out of the budget cell navigation handler', a
   render(
     <TestProviders queryClient={client} store={store}>
       <div onKeyDown={navigateCell}>
-        <CategoryFundingStatus category={category} month="2024-01" />
+        <CategoryFundingProvider category={category} month="2024-01">
+          <CategoryFundingStatus />
+        </CategoryFundingProvider>
       </div>
     </TestProviders>,
   );

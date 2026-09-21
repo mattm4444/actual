@@ -79,36 +79,55 @@ export function BalanceCell({
       longGoal={longGoal}
       CarryoverIndicator={MobileCarryoverIndicator}
     >
-      {({ type, value, className: defaultClassName }) => (
+      {({
+        type,
+        value,
+        className: defaultClassName,
+        statusIcon,
+        statusLabel,
+        badgeStyle,
+      }) => (
         <Button
           variant="bare"
           style={{
             ...PILL_STYLE,
             maxWidth: columnWidth,
+            ...(badgeStyle && {
+              backgroundColor: 'transparent',
+              padding: 0,
+              minHeight: 40,
+            }),
           }}
           onPress={onPress}
-          aria-label={ariaLabel}
+          aria-label={
+            statusLabel ? `${ariaLabel ?? ''}: ${statusLabel}` : ariaLabel
+          }
         >
-          <PrivacyFilter>
-            <AutoTextSize
-              key={value}
-              as={Text}
-              minFontSizePx={6}
-              maxFontSizePx={12}
-              mode="oneline"
-              className={cx(
-                defaultClassName,
-                css({
-                  ...styles.tnum,
-                  maxWidth: columnWidth,
-                  textAlign: 'right',
-                  fontSize: 12,
-                }),
-              )}
-            >
-              {format(value, type)}
-            </AutoTextSize>
-          </PrivacyFilter>
+          <span style={{ ...badgeStyle, minWidth: 0, maxWidth: columnWidth }}>
+            {statusIcon}
+            <PrivacyFilter>
+              <AutoTextSize
+                key={value}
+                as={Text}
+                minFontSizePx={6}
+                maxFontSizePx={12}
+                mode="oneline"
+                className={cx(
+                  defaultClassName,
+                  css({
+                    ...styles.tnum,
+                    maxWidth: badgeStyle
+                      ? `calc(${columnWidth} - 30px)`
+                      : columnWidth,
+                    textAlign: 'right',
+                    fontSize: 12,
+                  }),
+                )}
+              >
+                {format(value, type)}
+              </AutoTextSize>
+            </PrivacyFilter>
+          </span>
         </Button>
       )}
     </BalanceWithCarryover>

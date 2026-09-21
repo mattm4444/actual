@@ -1,9 +1,26 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import type { BudgetPage } from './page-models/budget-page';
 import { ConfigurationPage } from './page-models/configuration-page';
 import { Navigation } from './page-models/navigation';
+
+// Local review artifacts are separate from the Linux-only VRT baselines.
+async function captureThemeEvidence(target: Locator, name: string) {
+  if (!process.env.FUNDING_EVIDENCE) return;
+  const page = target.page();
+  for (const theme of ['auto', 'dark', 'midnight'] as const) {
+    await page.evaluate(theme => window.Actual.setTheme(theme), theme);
+    await expect(page.locator('[data-theme]')).toHaveAttribute(
+      'data-theme',
+      theme,
+    );
+    await target.screenshot({
+      path: test.info().outputPath(`${name}-${theme}.png`),
+    });
+  }
+  await page.evaluate(() => window.Actual.setTheme('auto'));
+}
 
 for (const budgetType of ['Envelope', 'Tracking'] as const) {
   test.describe('Category funding - ' + budgetType, () => {
@@ -60,24 +77,42 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       const status = row.getByTestId('category-funding-status').first();
       const fund = status.getByRole('button', { name: /^Fund Food for / });
       const cell = row.getByTestId('budget').first();
+      const badge = row.locator('[data-funding-state]').first();
 
       await budget.setBudgetedAmount('Food', '0');
       await expect(status).toContainText('650.00 needed');
+      await expect(badge).toHaveAttribute(
+        'data-funding-state',
+        budgetType === 'Tracking' ? 'overspent' : 'underfunded',
+      );
       await page.mouse.move(0, 0);
       await row.screenshot({ path: testInfo.outputPath('underfunded.png') });
       await expect(row).toMatchThemeScreenshots();
 
       await budget.setBudgetedAmount('Food', '400');
       await expect(status).toContainText('250.00 needed');
+      await expect(badge).toHaveAttribute('data-funding-state', 'underfunded');
       await row.screenshot({
         path: testInfo.outputPath('partially-funded.png'),
       });
       await expect(row).toMatchThemeScreenshots();
+      await page
+        .locator(':focus')
+        .evaluateAll(elements =>
+          elements.forEach(element => (element as HTMLElement).blur()),
+        );
+      await page.mouse.move(0, 0);
+      await expect(status).toBeHidden();
+      expect((await row.boundingBox())?.height).toBeLessThanOrEqual(33);
+      await captureThemeEvidence(row, 'desktop-underfunded');
+      await row.hover();
       await expect(fund).toBeEnabled();
       await fund.focus();
       await expect(fund).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(cell).toHaveText('650.00');
+      await expect(badge).toHaveAttribute('data-funding-state', 'funded');
+      await captureThemeEvidence(row, 'desktop-funded');
       await expect(status).toHaveText('Funded');
       await expect(fund).toHaveCount(0);
 
@@ -98,6 +133,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
 
       await budget.setBudgetedAmount('Food', '400');
       await expect(status).toContainText('250.00 needed');
+      await row.hover();
       await fund.click();
       await expect(cell).toHaveText('650.00');
       await expect(status).toHaveText('Funded');
@@ -135,11 +171,19 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       });
       const mobileStatus = mobileRow.getByTestId('category-funding-status');
       await expect(mobileStatus).toContainText('700.00 needed');
+      await captureThemeEvidence(mobileRow, 'mobile-underfunded');
+      await mobileRow.screenshot({
+        path: testInfo.outputPath('mobile-underfunded.png'),
+      });
       await expect(mobileRow).toMatchThemeScreenshots();
       await mobileStatus
         .getByRole('button', { name: /^Fund Food for / })
         .click();
       await expect(mobileStatus).toHaveText('Funded');
+      await captureThemeEvidence(mobileRow, 'mobile-funded');
+      await mobileRow.screenshot({
+        path: testInfo.outputPath('mobile-funded.png'),
+      });
       await expect(mobileRow).toMatchThemeScreenshots();
 
       await page.setViewportSize({ width: 1280, height: 900 });
@@ -157,7 +201,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
     });
 
     if (budgetType === 'Envelope') {
-      test('partially funds at nonzero priority and restores available funds with undo', async () => {
+      test('fully funds at nonzero priority into overbudget and restores available funds with undo', async () => {
         const row = budget.budgetTable.getByTestId('row').filter({
           has: page
             .getByTestId('category-name')
@@ -181,25 +225,33 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
             .getByText('Restaurants', { exact: true }),
         });
         const otherCell = otherRow.getByTestId('budget').first();
-        // The pinned demo has 300 in Restaurants and zero To Budget after
-        // setting Food to 400. Releasing 100 creates a partial-funding case.
+        // The pinned demo has zero To Budget after setting Food to 400.
+        // Releasing 100 must still allow the full 250 recommendation.
         await budget.setBudgetedAmount('Restaurants', '200');
         const unchangedNeighbor = await otherCell.innerText();
         const status = row.getByTestId('category-funding-status').first();
         const fund = status.getByRole('button', { name: /^Fund Food for / });
         await expect(status).toContainText('250.00 needed');
+        await row.hover();
         await fund.focus();
         await page.keyboard.press('Space');
-        await expect(row.getByTestId('budget').first()).toHaveText('500.00');
-        await expect(status).toContainText('150.00 needed');
-        await expect(fund).toBeDisabled();
+        await expect(row.getByTestId('budget').first()).toHaveText('650.00');
+        await expect(status).toHaveText('Funded');
+        const summary = page.locator(
+          `[data-testid="budget-summary"][data-month="${await budget.getSelectedMonth()}"]`,
+        );
+        await expect(summary).toContainText('Overbudgeted:');
+        await expect(summary).toContainText('-150.00');
+        await expect(fund).toHaveCount(0);
         await expect(otherCell).toHaveText(unchangedNeighbor);
         await expect(row).toMatchThemeScreenshots();
         await page.keyboard.press('Control+z');
         await expect(row.getByTestId('budget').first()).toHaveText('400.00');
+        await row.hover();
         await expect(fund).toBeEnabled();
+        await expect(summary).toContainText('100.00');
         await page.keyboard.press('Control+Shift+z');
-        await expect(row.getByTestId('budget').first()).toHaveText('500.00');
+        await expect(row.getByTestId('budget').first()).toHaveText('650.00');
       });
     }
 
@@ -228,6 +280,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
         const status = row.getByTestId('category-funding-status').first();
         await expect(status).toContainText('1,200.00 needed');
         await expect(row).toMatchThemeScreenshots();
+        await row.hover();
         await status.getByRole('button', { name: /^Fund Income for / }).click();
         await expect(cell).toHaveText('1,200.00');
         await expect(status).toHaveText('Funded');

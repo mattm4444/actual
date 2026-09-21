@@ -12,6 +12,7 @@ import { View } from '@actual-app/components/view';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type { CategoryEntity } from '@actual-app/core/types/models';
 
+import { CategoryFundingProvider } from '#components/budget/goals/CategoryFundingContext';
 import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { useNavigate } from '#hooks/useNavigate';
 import { useSyncedPref } from '#hooks/useSyncedPref';
@@ -246,34 +247,36 @@ export function IncomeCategoryListItem({
       data-testid="category-row"
       {...props}
     >
-      <View
-        style={{
-          height: ROW_HEIGHT,
-          borderColor: theme.tableBorder,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingLeft: 5,
-          paddingRight: 5,
-          borderBottomWidth: 1,
-          opacity: category.hidden ? 0.5 : undefined,
-          backgroundColor: monthUtils.isCurrentMonth(month)
-            ? theme.budgetCurrentMonth
-            : theme.budgetOtherMonth,
-        }}
-      >
-        <IncomeCategoryName category={category} onEdit={onEdit} />
-        <IncomeCategoryCells
-          key={`${category.id}`}
-          category={category}
-          month={month}
-          onBudgetAction={onBudgetAction}
-          onPress={
-            budgetType === 'envelope' ? onOpenBalanceMenu : onShowActivity
-          }
-        />
-      </View>
-      <CategoryFundingStatus category={category} month={month} />
+      <CategoryFundingProvider category={category} month={month}>
+        <View
+          style={{
+            height: ROW_HEIGHT,
+            borderColor: theme.tableBorder,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingLeft: 5,
+            paddingRight: 5,
+            borderBottomWidth: 1,
+            opacity: category.hidden ? 0.5 : undefined,
+            backgroundColor: monthUtils.isCurrentMonth(month)
+              ? theme.budgetCurrentMonth
+              : theme.budgetOtherMonth,
+          }}
+        >
+          <IncomeCategoryName category={category} onEdit={onEdit} />
+          <IncomeCategoryCells
+            key={`${category.id}`}
+            category={category}
+            month={month}
+            onBudgetAction={onBudgetAction}
+            onPress={
+              budgetType === 'envelope' ? onOpenBalanceMenu : onShowActivity
+            }
+          />
+        </View>
+        <CategoryFundingStatus />
+      </CategoryFundingProvider>
     </GridListItem>
   );
 }

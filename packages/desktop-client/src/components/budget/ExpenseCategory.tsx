@@ -8,6 +8,7 @@ import type {
   CategoryEntity,
   CategoryGroupEntity,
 } from '@actual-app/core/types/models';
+import { css } from '@emotion/css';
 
 import { DropHighlight, useDraggable, useDroppable } from '#components/sort';
 import type {
@@ -18,6 +19,7 @@ import type {
 import { Row } from '#components/table';
 import { useDragRef } from '#hooks/useDragRef';
 
+import { CategoryFundingProvider } from './goals/CategoryFundingContext';
 import { CategoryFundingStatus } from './goals/CategoryFundingStatus';
 import { RenderMonths } from './RenderMonths';
 import { SidebarCategory } from './SidebarCategory';
@@ -79,6 +81,11 @@ export function ExpenseCategory({
     <Row
       innerRef={dropRef}
       collapsed
+      className={css({
+        '& [data-testid="category-funding-status"]': { display: 'none' },
+        '&:hover [data-testid="category-funding-status"], &:focus-within [data-testid="category-funding-status"]':
+          { display: 'flex' },
+      })}
       style={{
         backgroundColor: theme.budgetCurrentMonth,
         height: 'auto',
@@ -108,7 +115,7 @@ export function ExpenseCategory({
 
         <RenderMonths>
           {({ month }) => (
-            <>
+            <CategoryFundingProvider category={cat} month={month}>
               <View style={{ height: 32, flexShrink: 0 }}>
                 <MonthComponent
                   month={month}
@@ -123,8 +130,8 @@ export function ExpenseCategory({
                   onShowActivity={onShowActivity}
                 />
               </View>
-              <CategoryFundingStatus category={cat} month={month} />
-            </>
+              <CategoryFundingStatus />
+            </CategoryFundingProvider>
           )}
         </RenderMonths>
       </View>

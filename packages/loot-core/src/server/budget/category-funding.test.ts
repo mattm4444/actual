@@ -256,30 +256,55 @@ it('uses recurring schedules through the real schedule engine', async () => {
   expect(budgeted).toBe(65000);
 });
 
-it('preserves available-funds priority clamping without claiming the category is fully funded', async () => {
+it.each([10000, 0, -10000])(
+  'funds the full amount at nonzero priority with %i available',
+  async availableBefore => {
+    templates = [{ ...fixed, priority: 1 }];
+    budgeted = 40000;
+    available = availableBefore;
+    expect(await getCategoryFunding(request)).toMatchObject({
+      remaining: 25000,
+      amountToFund: 25000,
+    });
+    expect(await fundCategory(request)).toBe(true);
+    expect(budgeted).toBe(65000);
+    expect(available).toBe(availableBefore - 25000);
+    expect(await getCategoryFunding(request)).toMatchObject({
+      remaining: 0,
+      amountToFund: 0,
+    });
+    expect(await fundCategory(request)).toBe(false);
+    expect(actions.setBudget).toHaveBeenCalledExactlyOnceWith({
+      month: request.month,
+      category: category.id,
+      amount: 65000,
+    });
+  },
+);
+
+it('funds future monthly demand even with no available funds', async () => {
+  templates = [{ ...fixed, priority: 1 }];
+  available = 0;
+  const future = { ...request, month: '2027-01' };
+  expect(await getCategoryFunding(future)).toMatchObject({
+    remaining: 65000,
+    amountToFund: 65000,
+  });
+  await fundCategory(future);
+  expect(budgeted).toBe(65000);
+  expect(available).toBe(-65000);
+});
+
+it('preserves the available-funds clamp for ordinary Apply Automation', async () => {
   templates = [{ ...fixed, priority: 1 }];
   budgeted = 40000;
   available = 10000;
-  expect(await getCategoryFunding(request)).toMatchObject({
-    remaining: 25000,
-    amountToFund: 10000,
+  await applySingleCategoryTemplate({
+    month: request.month,
+    category: category.id,
   });
-  await fundCategory(request);
   expect(budgeted).toBe(50000);
-  expect(await getCategoryFunding(request)).toMatchObject({
-    remaining: 15000,
-    amountToFund: 0,
-  });
-  await fundCategory(request);
-  expect(actions.setBudget).toHaveBeenCalledTimes(1);
-});
-
-it('shows future monthly demand with no available funds, while preserving priority rules', async () => {
-  templates = [{ ...fixed, priority: 1 }];
-  available = 0;
-  expect(
-    await getCategoryFunding({ ...request, month: '2027-01' }),
-  ).toMatchObject({ remaining: 65000, amountToFund: 0 });
+  expect(available).toBe(0);
 });
 
 it('keeps the existing priority-zero ability to budget beyond available funds', async () => {

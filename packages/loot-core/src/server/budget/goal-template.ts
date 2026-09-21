@@ -445,18 +445,10 @@ async function computeCategoryFunding(month: string, categoryId: string) {
     throw new Error('Invalid budget automation amount');
   }
   const remaining = Math.max(0, values.budgeted - budgeted);
-  // Apply uses available-funds/priority clamping. Never bypass that using the
-  // unconstrained projection, or silently pull money out of an overfunded row.
-  let amountToFund = 0;
-  if (remaining > 0) {
-    const applicable = await computeTemplates(month, true, input, [category]);
-    if (applicable.errors.length) throw new Error(applicable.errors.join('\n'));
-    const amount = applicable.contexts[0]?.getValues().budgeted ?? budgeted;
-    if (!Number.isFinite(amount)) {
-      throw new Error('Invalid budget automation amount');
-    }
-    amountToFund = Math.max(0, Math.min(values.budgeted, amount) - budgeted);
-  }
+  // An explicit Fund click allocates the full remaining recommendation, like
+  // manually editing this budget cell. It may increase the overbudgeted total.
+  // Bulk Apply still uses its existing available-funds/priority clamping.
+  const amountToFund = remaining;
   return {
     funding: {
       budgeted,

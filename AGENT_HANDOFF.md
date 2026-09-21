@@ -1,28 +1,36 @@
 # Actual Budget category funding handoff
 
-Last updated: September 20, 2026. Implementation and required automated validation are complete. The final Linux CI results were reviewed at the user's request and passed. The branch is ready for code review. See [the detailed validation report](feature-validation/category-funding/VALIDATION.md) for the exact file map, behavior, evidence and manual checklist.
+Last updated: September 20, 2026. The follow-up adds live yellow/green balance badges, compact desktop disclosure, and full explicit category funding even when this increases the overbudgeted amount. See `feature-validation/category-funding/VALIDATION.md`. The earlier Linux CI evidence below predates this follow-up and must not be presented as current verification.
+
+## Badge and explicit-Fund follow-up
+
+The user explicitly requested YNAB-style live balance color without Overwrite with templates and reported that the Fund button must increase the overbudgeted amount rather than stop at the automation priority cap. `computeCategoryFunding` now exposes the full engine-projected remaining amount as `amountToFund`; ordinary Apply/bulk priority rules are unchanged. The existing undoable handler and single-category writes remain intact.
+
+`CategoryFundingProvider` shares one category/month query between the badge and Fund detail. Desktop details appear on hover or focus; mobile keeps a reachable Fund control. The provider belongs inside mobile `GridListItem`, because the collection renderer does not preserve an outer provider. The badge is yellow with a clock for underfunding, green with a check for funded, red for negative balances, and neutral while updating/unavailable/no demand. Mobile autosizing applies only to the number so it does not truncate the amount to make room for the icon.
+
+Local evidence: 145 engine tests and 23 component tests passed. Repository typecheck and all 12 browser scenarios passed, including the existing budget regressions. Screenshots were reviewed at desktop/mobile sizes in light, dark and midnight. Changed-file lint passed after import ordering cleanup. Linux VRT baselines still need container regeneration for the changed UI; do not generate or rename Windows screenshots as Linux baselines. Follow AGENTS.md: push, then stop without polling CI.
 
 ## Repository and authorization
 
 - Local checkout: `C:\Users\mattf\Actual Budget`, branch `category-funding`.
 - Review destination: https://github.com/mattm4444/actual/tree/category-funding, remote `fork`. Push feature changes to `fork`; `origin` is the upstream Actual project. The older `private` remote is historical and is no longer the review destination.
 - Starting upstream: `5a131c7c8821ab09a04d66226f06b616b9b2c605`.
-- Latest implementation and Linux baselines: `1a8d3e0e4ac449598837b667af3c4861c2e2ce0e`.
+- Previous implementation and Linux baselines (before the badge follow-up): `1a8d3e0e4ac449598837b667af3c4861c2e2ce0e`.
 - The user explicitly requested that all feature commits be published to the `mattm4444/actual` fork for review. Use `fork/category-funding` as the tracking branch. No new PR or deployment was requested.
 - Current direction: finish the closeout documentation, commit and push, then stop. Do not wait for, poll or monitor GitHub Actions, or rerun the full local suite when CI will run it. Investigate future CI failures when the user returns with them; follow the local AGENTS.md CI usage instructions.
 - Follow `AGENTS.md`, `.claude/skills/committing-actual-changes/SKILL.md`, `.claude/skills/running-vrts/SKILL.md` and `.github/agents/pr-and-commit-rules.md`. Prefix commits `[AI]`; never bypass hooks. Run Yarn from the repository root.
 
 ## User requirements and implementation
 
-Expose monthly category underfunding, amount needed, completed status and one-click Fund using Actual's existing Budget Automation engine. Preserve extra allocations, neighboring categories, priority constraints, normal Apply behavior and undo/redo. No additional goals data model, duplicated schedule math or bulk fund-all.
+Expose monthly category underfunding, amount needed, completed status and one-click Fund using Actual's existing Budget Automation engine. Preserve extra allocations, neighboring categories, bulk automation priority constraints, normal Apply behavior and undo/redo. No additional goals data model, duplicated schedule math or bulk fund-all.
 
-`computeCategoryFunding` reuses `computeTemplates` / `CategoryTemplateContext`. The existing dry-run projection gives an absolute monthly recommendation; the normal clamped engine gives the allowed increment. `budget/fund-category` recomputes inside `mutator(undoable(...))`, then updates only the category through `setBudget` / `setGoal` inside `batchMessages`. A no-op returns false and produces no misleading mobile Undo toast.
+`computeCategoryFunding` reuses `computeTemplates` / `CategoryTemplateContext`. The existing dry-run projection gives an absolute monthly recommendation; the explicit Fund action adds the full remaining recommendation. Ordinary Apply remains clamped. `budget/fund-category` recomputes inside `mutator(undoable(...))`, then updates only the category through `setBudget` / `setGoal` inside `batchMessages`. A no-op returns false and produces no misleading mobile Undo toast.
 
 One shared `CategoryFundingStatus` covers desktop/mobile expense rows and tracking-income rows. Envelope income is excluded. Reads use existing saved UI definitions or the scoped legacy note parser, without writing definitions. Category/month queries refresh on changed data, undo/redo and Fund; empty sync events do not invalidate. Background recalculation preserves keyboard focus. Positive completed recommendations show Funded; nonpositive recommendations show No funding needed; errors fail closed.
 
 Standalone balance goals, cleanup-only and limit-only definitions have no engine-prescribed monthly allocation and intentionally receive no invented Fund amount. Existing goal indicators remain. Expired save-by definitions show Automation unavailable. Priority zero keeps Actual's existing overbudget behavior. No large-budget stress benchmark was performed.
 
-## Validation
+## Historical validation before the badge follow-up
 
 Verified passing Linux run in the earlier validation repository: https://github.com/mattm4444/actual-budget-category-feature/actions/runs/35529409043
 

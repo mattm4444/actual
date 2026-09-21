@@ -3,4 +3,4 @@ category: Features
 authors: [mattm4444]
 ---
 
-Show monthly category funding needs with a Fund action that uses budget automations and preserves extra allocations.
+Show live category funding badges and a Fund action that fills the automation shortfall even when it increases the overbudgeted amount.
