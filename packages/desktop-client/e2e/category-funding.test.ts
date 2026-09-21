@@ -32,8 +32,9 @@ async function expectCompactMobileRow(row: Locator) {
   );
   const box = await row.boundingBox();
   const viewport = row.page().viewportSize();
-  if (!box || !viewport)
-    {throw new Error('Mobile row must have a visible layout');}
+  if (!box || !viewport) {
+    throw new Error('Mobile row must have a visible layout');
+  }
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
 }
 
