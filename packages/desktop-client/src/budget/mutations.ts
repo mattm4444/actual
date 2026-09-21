@@ -710,7 +710,7 @@ type ApplyBudgetActionPayload =
       args?: never;
     }
   | {
-      type: 'apply-single-category-template';
+      type: 'apply-single-category-template' | 'fund-category';
       month: string;
       args: {
         category: CategoryEntity['id'];
@@ -794,6 +794,13 @@ export function useBudgetActions() {
           return await send('budget/apply-goal-template', { month });
         case 'overwrite-goal-template':
           return await send('budget/overwrite-goal-template', { month });
+        case 'fund-category':
+          return {
+            funded: await send('budget/fund-category', {
+              month,
+              categoryId: args.category,
+            }),
+          };
         case 'apply-single-category-template':
           return await send('budget/apply-single-template', {
             month,
@@ -897,7 +904,7 @@ export function useBudgetActions() {
       }
     },
     onSuccess: notification => {
-      if (notification) {
+      if (notification && 'message' in notification) {
         dispatch(
           addNotification({
             notification: translateBudgetTemplateNotification(notification, t),

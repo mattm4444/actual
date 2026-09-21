@@ -8,6 +8,7 @@ import type {
   CategoryEntity,
   CategoryGroupEntity,
 } from '@actual-app/core/types/models';
+import { css } from '@emotion/css';
 
 import { DropHighlight, useDraggable, useDroppable } from '#components/sort';
 import type {
@@ -18,6 +19,8 @@ import type {
 import { Row } from '#components/table';
 import { useDragRef } from '#hooks/useDragRef';
 
+import { CategoryFundingProvider } from './goals/CategoryFundingContext';
+import { CategoryFundingStatus } from './goals/CategoryFundingStatus';
 import { RenderMonths } from './RenderMonths';
 import { SidebarCategory } from './SidebarCategory';
 
@@ -78,8 +81,16 @@ export function ExpenseCategory({
     <Row
       innerRef={dropRef}
       collapsed
+      className={css({
+        '& [data-testid="category-funding-status"]': { display: 'none' },
+        '&:hover [data-testid="category-funding-status"], &:focus-within [data-testid="category-funding-status"]':
+          { display: 'flex' },
+      })}
       style={{
         backgroundColor: theme.budgetCurrentMonth,
+        height: 'auto',
+        flex: '0 0 auto',
+        minHeight: 32,
         opacity: cat.hidden || categoryGroup?.hidden ? 0.5 : undefined,
       }}
     >
@@ -104,18 +115,23 @@ export function ExpenseCategory({
 
         <RenderMonths>
           {({ month }) => (
-            <MonthComponent
-              month={month}
-              editing={
-                editingCell &&
-                editingCell.id === cat.id &&
-                editingCell.cell === month
-              }
-              category={cat}
-              onEdit={onEditMonth}
-              onBudgetAction={onBudgetAction}
-              onShowActivity={onShowActivity}
-            />
+            <CategoryFundingProvider category={cat} month={month}>
+              <View style={{ height: 32, flexShrink: 0 }}>
+                <MonthComponent
+                  month={month}
+                  editing={
+                    editingCell &&
+                    editingCell.id === cat.id &&
+                    editingCell.cell === month
+                  }
+                  category={cat}
+                  onEdit={onEditMonth}
+                  onBudgetAction={onBudgetAction}
+                  onShowActivity={onShowActivity}
+                />
+              </View>
+              <CategoryFundingStatus />
+            </CategoryFundingProvider>
           )}
         </RenderMonths>
       </View>
