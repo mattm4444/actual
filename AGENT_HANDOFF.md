@@ -2,7 +2,7 @@
 
 Completed: mobile expense and income rows stay 50px high, with single-line names and status in the balance badge; the separate Fund button and Funded line are gone. Linux run [35556032284](https://github.com/mattm4444/actual/actions/runs/35556032284) passed every required check at `3c3c6cba223f76bd1a964bf8aed88cc4222fc72c`. The 51 current snapshots were collected unchanged and mobile themes visually inspected. Later commits only collect those baselines and update documentation.
 
-The user explicitly authorized waiting for that CI run and completing review preparation. The focused `category-funding-review` branch contains source, tests, baselines and the release note, excluding the fork-only workflow and handoff/evidence documents. Its source/test files match the CI-tested revision. A merge-tree check against upstream `8f2318d1d` found no conflicts. Human test/submission notes are outside the repo at `C:/Users/mattf/actual-review-notes/category-funding-review.md`.
+The user explicitly authorized waiting for that CI run and completing review preparation. The focused `category-funding-review` branch contains source, tests, baselines and the release note, excluding the fork-only workflow and handoff/evidence documents. Its source/test files match the CI-tested revision. A merge-tree check against upstream `8f2318d1d` found no conflicts. Human test/submission notes are outside the repo at the sibling `actual-review-notes/category-funding-review.md` file.
 
 ## Badge and explicit-Fund follow-up
 
@@ -14,7 +14,7 @@ Local evidence: 145 engine tests and 23 component tests passed. Repository typec
 
 ## Repository and authorization
 
-- Local checkout: `C:\Users\mattf\Actual Budget`, branch `category-funding`.
+- Local checkout: the repository root, branch `category-funding`.
 - Review destination: https://github.com/mattm4444/actual/tree/category-funding, remote `fork`. Push feature changes to `fork`; `origin` is the upstream Actual project. The older `private` remote is historical and is no longer the review destination.
 - Starting upstream: `5a131c7c8821ab09a04d66226f06b616b9b2c605`.
 - Previous implementation and Linux baselines (before the badge follow-up): `1a8d3e0e4ac449598837b667af3c4861c2e2ce0e`.
@@ -88,6 +88,6 @@ If needed first, run `corepack yarn build:plugins-service`. The redundant fronte
 
 Git hooks are installed at `.husky/_`; local ignored Corepack shims are `.yarn/local-shims`. Add that directory and `node_modules/.bin` to PATH for commits if Yarn is unavailable globally. Keep hooks enabled.
 
-Tests have left unrelated snapshot line-ending changes and `packages/loot-core/src/mocks/files/budgets/test-budget/` in the working tree. These were not committed. Do not delete or stage them indiscriminately. Downloaded `.funding-linux-artifacts/`, contact sheets and local logs are also untracked/ignored verification artifacts. The isolated baseline worktree is `C:\Users\mattf\actual-funding-upstream-check`.
+Tests have left unrelated snapshot line-ending changes and `packages/loot-core/src/mocks/files/budgets/test-budget/` in the working tree. These were not committed. Do not delete or stage them indiscriminately. Downloaded `.funding-linux-artifacts/`, contact sheets and local logs are also untracked/ignored verification artifacts. The isolated baseline worktree is the sibling `actual-funding-upstream-check` directory.
 
 Four shareable synthetic-demo evidence images from passing Linux run `35519077705` (before the no-op Undo fix) and the full manual checklist are in `feature-validation/category-funding/`. They are distinct from the 51 tracked Linux regression baselines under `packages/desktop-client/e2e/category-funding.test.ts-snapshots/`.

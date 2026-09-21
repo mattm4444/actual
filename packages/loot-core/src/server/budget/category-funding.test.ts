@@ -33,7 +33,10 @@ vi.mock('#server/aql', () => ({ aqlQuery: vi.fn() }));
 vi.mock('#server/sync', () => ({
   batchMessages: (fn: () => Promise<void>) => fn(),
 }));
-vi.mock('./statements', () => ({ getActiveSchedules: vi.fn() }));
+vi.mock('./statements', () => ({
+  getActiveSchedules: vi.fn(),
+  getCategoriesWithTemplateNotes: vi.fn(),
+}));
 vi.mock('./template-notes', () => ({
   getCategoriesWithTemplates: vi.fn(),
   storeNoteTemplates: vi.fn(),
@@ -488,4 +491,82 @@ it('rejects malformed non-finite engine amounts without writing a budget', async
   await expect(getCategoryFunding(request)).rejects.toThrow();
   await expect(fundCategory(request)).rejects.toThrow();
   expect(actions.setBudget).not.toHaveBeenCalled();
+});
+
+describe('untrusted saved automation definitions', () => {
+  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects saved periodic interval %s for both reads and funding without writing',
+    async interval => {
+      templates = [
+        {
+          type: 'periodic',
+          amount: 100,
+          period: { period: 'day', amount: interval },
+          starting: '2023-12-01',
+          directive: 'template',
+          priority: 0,
+        },
+      ];
+      await expect(getCategoryFunding(request)).rejects.toThrow(
+        'Periodic template interval must be a positive integer',
+      );
+      await expect(fundCategory(request)).rejects.toThrow(
+        'Periodic template interval must be a positive integer',
+      );
+      expect(actions.setBudget).not.toHaveBeenCalled();
+      expect(actions.setGoal).not.toHaveBeenCalled();
+      // A malformed category must not leave the worker unable to serve another request.
+      templates = [fixed];
+      expect(await getCategoryFunding(request)).toMatchObject({
+        remaining: 65000,
+      });
+    },
+  );
+
+  it.each(['{broken', 'null', '{}', '123'])(
+    'reports an invalid saved definition clearly (%s) without writing',
+    async goalDef => {
+      vi.mocked(aql.aqlQuery).mockResolvedValue({
+        data: [{ ...category, goal_def: goalDef }],
+        dependencies: [],
+      });
+      await expect(getCategoryFunding(request)).rejects.toThrow(
+        'Invalid saved budget automation definition',
+      );
+      await expect(fundCategory(request)).rejects.toThrow(
+        'Invalid saved budget automation definition',
+      );
+      expect(actions.setBudget).not.toHaveBeenCalled();
+      expect(actions.setGoal).not.toHaveBeenCalled();
+    },
+  );
+
+  it('fails closed for a zero-interval legacy note using the real note parser', async () => {
+    const actualNotes = await vi.importActual<{
+      getCategoriesWithTemplates: typeof getCategoriesWithTemplates;
+    }>('./template-notes');
+    vi.mocked(getCategoriesWithTemplates).mockImplementation(
+      actualNotes.getCategoriesWithTemplates,
+    );
+    vi.mocked(statements.getCategoriesWithTemplateNotes).mockResolvedValue([
+      {
+        id: category.id,
+        name: category.name,
+        note: '#template 100 repeat every 0 days starting 2026-09-01',
+      },
+    ]);
+    vi.mocked(aql.aqlQuery).mockResolvedValue({
+      data: [{ ...category, template_settings: { source: 'notes' } }],
+      dependencies: [],
+    });
+    const september = { ...request, month: '2026-09' };
+    await expect(getCategoryFunding(september)).rejects.toThrow(
+      'Invalid budget automation',
+    );
+    await expect(fundCategory(september)).rejects.toThrow(
+      'Invalid budget automation',
+    );
+    expect(actions.setBudget).not.toHaveBeenCalled();
+    expect(actions.setGoal).not.toHaveBeenCalled();
+  });
 });

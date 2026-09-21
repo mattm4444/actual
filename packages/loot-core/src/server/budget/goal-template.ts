@@ -411,10 +411,21 @@ async function computeCategoryFunding(month: string, categoryId: string) {
   );
   const category = categories[0];
   if (!category || (category.is_income && !isTrackingBudget())) return null;
-  const templates: Template[] =
-    category.template_settings?.source === 'ui'
-      ? JSON.parse(category.goal_def || '[]')
-      : ((await getCategoriesWithTemplates([categoryId]))[0]?.templates ?? []);
+  let templates: Template[];
+  if (category.template_settings?.source === 'ui') {
+    try {
+      const parsed: unknown = JSON.parse(category.goal_def || '[]');
+      if (!Array.isArray(parsed)) {
+        throw new Error('Expected an array of budget automation templates');
+      }
+      templates = parsed;
+    } catch (cause) {
+      throw new Error('Invalid saved budget automation definition', { cause });
+    }
+  } else {
+    templates =
+      (await getCategoriesWithTemplates([categoryId]))[0]?.templates ?? [];
+  }
   if (templates.some(t => t.type === 'error')) {
     throw new Error('Invalid budget automation');
   }
