@@ -1,12 +1,8 @@
 ## Latest mobile refinement
 
-The user removed the mobile Fund action and separate Funded line. Mobile expense and income rows now stay 50px high, with single-line category names and funding status in the balance badge. All four local feature browser scenarios, repository typecheck and changed-file lint passed. Linux run 35550556635 passed for the preceding `cd40d2723` revision. Current compact-mobile Linux snapshots are still pending; do not claim they are validated from that earlier run.
+Completed: mobile expense and income rows stay 50px high, with single-line names and status in the balance badge; the separate Fund button and Funded line are gone. Linux run [35556032284](https://github.com/mattm4444/actual/actions/runs/35556032284) passed every required check at `3c3c6cba223f76bd1a964bf8aed88cc4222fc72c`. The 51 current snapshots were collected unchanged and mobile themes visually inspected. Later commits only collect those baselines and update documentation.
 
-The user authorized inspecting the previous test. A follow-up asks whether to monitor the new run to collect updated Linux snapshots; absent an answer, retain the stop-after-push rule below.
-
-# Actual Budget category funding handoff
-
-Last updated: September 20, 2026. The follow-up adds live yellow/green balance badges, compact desktop disclosure, and full explicit category funding even when this increases the overbudgeted amount. See `feature-validation/category-funding/VALIDATION.md`. The earlier Linux CI evidence below predates this follow-up and must not be presented as current verification.
+The user explicitly authorized waiting for that CI run and completing review preparation. The focused `category-funding-review` branch contains source, tests, baselines and the release note, excluding the fork-only workflow and handoff/evidence documents. Its source/test files match the CI-tested revision. A merge-tree check against upstream `8f2318d1d` found no conflicts. Human test/submission notes are outside the repo at `C:/Users/mattf/actual-review-notes/category-funding-review.md`.
 
 ## Badge and explicit-Fund follow-up
 

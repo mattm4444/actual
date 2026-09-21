@@ -1,6 +1,6 @@
 # Category funding validation
 
-Status: the live balance badges and explicit overbudgeting revision at `cd40d2723682b08778680e6547bd6c3dd27484d8` passed [Linux run 35550556635](https://github.com/mattm4444/actual/actions/runs/35550556635). The subsequent compact mobile revision has passed local type checking, changed-file lint and all four category-funding browser scenarios. Linux screenshots must be regenerated for the compact mobile rows before upstream review is marked ready.
+Status: the compact mobile revision passed [Linux run 35556032284](https://github.com/mattm4444/actual/actions/runs/35556032284) at `3c3c6cba223f76bd1a964bf8aed88cc4222fc72c`. Typecheck, lint, all test workspaces, browser interactions, build and screenshot generation/verification passed. All 51 current Linux baselines were collected unchanged; the mobile images were inspected in light, dark and midnight. The focused upstream branch is `category-funding-review`.
 
 ## Behavior
 
@@ -15,7 +15,7 @@ Standalone #goal, cleanup-only, and limit-only definitions do not prescribe a mo
 - Removed the separate funding detail from mobile expense and tracking-income rows; desktop Fund and its full-shortfall allocation behavior remain available.
 - Category names use a single line, preserving normal category editing and balance actions.
 - Local production build, repository typecheck, changed-file type-aware lint, and all four category-funding browser scenarios passed. Browser assertions cover 320px and 390px rows, absence of Fund/status lines, row height, and live underfunded/funded labels. Light, dark and midnight captures were visually inspected.
-- Prior Linux run passed typecheck, lint, all workspaces, browser interactions, screenshot generation and screenshot verification. That run predates this mobile refinement.
+- Final Linux run 35556032284 passed typecheck, lint, all workspaces, browser interactions, screenshot generation and verification for this mobile refinement. All 51 baselines come directly from its pinned Playwright container. Obsolete snapshots from renamed tests were removed.
 
 ## September 20 badge and explicit-Fund revision
 
