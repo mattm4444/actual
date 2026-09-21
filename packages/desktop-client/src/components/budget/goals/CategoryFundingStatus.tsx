@@ -13,19 +13,24 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { useBudgetActions } from '#budget/mutations';
 import { fundingQueries } from '#budget/queries';
+import { FinancialText } from '#components/FinancialText';
 import { PrivacyFilter } from '#components/PrivacyFilter';
 import { useFormat } from '#hooks/useFormat';
 import { useUndo } from '#hooks/useUndo';
 
 import { useCategoryFunding } from './CategoryFundingContext';
 
-export function CategoryFundingStatus() {
+type CategoryFundingStatusProps = { onFunded?: () => void };
+
+export function CategoryFundingStatus(props: CategoryFundingStatusProps) {
   const state = useCategoryFunding();
   if (!state) return null;
-  return <EnabledCategoryFundingStatus />;
+  return <EnabledCategoryFundingStatus {...props} />;
 }
 
-function EnabledCategoryFundingStatus() {
+function EnabledCategoryFundingStatus({
+  onFunded,
+}: CategoryFundingStatusProps) {
   const { t } = useTranslation();
   const format = useFormat();
   const { isNarrowWidth } = useResponsive();
@@ -55,6 +60,7 @@ function EnabledCategoryFundingStatus() {
       await queryClient.invalidateQueries({ queryKey: fundingQueries.all() });
       if (result && 'funded' in result && result.funded) {
         showUndoNotification({ message: t('Budget automation applied.') });
+        onFunded?.();
       }
     } catch {
       // useBudgetActions displays the normal budget mutation error notification.
@@ -73,16 +79,13 @@ function EnabledCategoryFundingStatus() {
         }
       }}
       style={{
-        minHeight: isNarrowWidth ? 40 : 28,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        gap: 5,
-        padding: '0 10px 3px 5px',
-        fontSize: 12,
-        backgroundColor: monthUtils.isCurrentMonth(month)
-          ? theme.budgetCurrentMonth
-          : theme.budgetOtherMonth,
+        width: isNarrowWidth ? '100%' : 320,
+        maxWidth: 'calc(100vw - 32px)',
+        gap: 12,
+        padding: 16,
+        fontSize: 13,
+        textAlign: 'left',
+        boxSizing: 'border-box',
         color: isError
           ? theme.pageTextLight
           : remaining > 0
@@ -91,6 +94,93 @@ function EnabledCategoryFundingStatus() {
         borderBottom: '1px solid ' + theme.tableBorder,
       }}
     >
+      <View style={{ gap: 4 }}>
+        <Text style={{ fontWeight: 600, color: theme.pageText }}>
+          <Trans>Budget goal</Trans>
+        </Text>
+        <Text style={{ color: theme.pageTextLight }}>{monthLabel}</Text>
+      </View>
+      {!isError && funding && (
+        <>
+          {funding.recommended > 0 && (
+            <View
+              role="progressbar"
+              aria-label={t('Goal funding progress')}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(
+                Math.max(
+                  0,
+                  Math.min(1, 1 - funding.remaining / funding.recommended),
+                ) * 100,
+              )}
+              style={{
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: theme.pillBackground,
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                style={{
+                  height: '100%',
+                  width: `${Math.max(0, Math.min(1, 1 - funding.remaining / funding.recommended)) * 100}%`,
+                  backgroundColor:
+                    remaining > 0 ? theme.warningText : theme.noticeText,
+                }}
+              />
+            </View>
+          )}
+          <View style={{ gap: 8, color: theme.pageText }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                gap: 16,
+              }}
+            >
+              <Text>
+                <Trans>Recommended this month</Trans>
+              </Text>
+              <PrivacyFilter>
+                <FinancialText>
+                  {format(funding.recommended, 'financial')}
+                </FinancialText>
+              </PrivacyFilter>
+            </View>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                gap: 16,
+              }}
+            >
+              <Text>
+                <Trans>Assigned so far</Trans>
+              </Text>
+              <PrivacyFilter>
+                <FinancialText>
+                  {format(funding.budgeted, 'financial')}
+                </FinancialText>
+              </PrivacyFilter>
+            </View>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                gap: 16,
+              }}
+            >
+              <Text>
+                <Trans>Still needed</Trans>
+              </Text>
+              <PrivacyFilter>
+                <FinancialText>{amount}</FinancialText>
+              </PrivacyFilter>
+            </View>
+          </View>
+        </>
+      )}
       {isError ? (
         <Tooltip
           content={t("Check this category's budget automation and try again.")}
@@ -108,23 +198,26 @@ function EnabledCategoryFundingStatus() {
           </PrivacyFilter>
           <Tooltip content={explanation}>
             <Button
-              variant="bare"
-              aria-label={t('Fund {{category}} for {{month}}', {
-                category: category.name,
-                month: monthLabel,
-              })}
+              variant="primary"
+              aria-label={t(
+                'Assign money to underfunded goal: {{category}} for {{month}}',
+                {
+                  category: category.name,
+                  month: monthLabel,
+                },
+              )}
               isDisabled={!canFund || isPending}
               onPress={() => {
                 void fund();
               }}
               style={{
-                padding: '2px 8px',
-                minHeight: isNarrowWidth ? 40 : 24,
-                fontSize: 12,
-                color: theme.buttonNormalText,
+                padding: '8px 12px',
+                minHeight: 44,
+                width: '100%',
+                whiteSpace: 'normal',
               }}
             >
-              <Trans>Fund</Trans>
+              <Trans>Assign money to underfunded goal</Trans>
             </Button>
           </Tooltip>
         </>
@@ -137,12 +230,12 @@ function EnabledCategoryFundingStatus() {
           <Trans>No funding needed</Trans>
         </Text>
       ) : (
-        <>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <SvgCheckmark aria-hidden="true" width={12} height={12} />
           <Text>
             <Trans>Funded</Trans>
           </Text>
-        </>
+        </View>
       )}
     </View>
   );

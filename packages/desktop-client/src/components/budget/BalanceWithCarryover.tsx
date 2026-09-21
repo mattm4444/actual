@@ -34,6 +34,12 @@ import type { Binding } from '#spreadsheet';
 import { useCategoryFunding } from './goals/CategoryFundingContext';
 import { makeBalanceAmountStyle } from './util';
 
+function BalanceTooltip(props: ComponentPropsWithoutRef<typeof Tooltip>) {
+  const { isNarrowWidth } = useResponsive();
+  // Mobile balance buttons must not inherit TooltipTrigger's disabled press context.
+  return isNarrowWidth ? props.children : <Tooltip {...props} />;
+}
+
 type CarryoverIndicatorProps = {
   style?: CSSProperties;
 };
@@ -335,7 +341,7 @@ export function BalanceWithCarryover({
     <CellValue binding={balance} type="financial" {...props}>
       {({ type, name, value: balanceValue }) => (
         <>
-          <Tooltip
+          <BalanceTooltip
             content={
               <View style={{ padding: 10 }}>
                 {hasFunding ? (
@@ -385,7 +391,7 @@ export function BalanceWithCarryover({
                 <CellValueText type={type} name={name} value={balanceValue} />
               </span>
             )}
-          </Tooltip>
+          </BalanceTooltip>
 
           {carryoverValue && (
             <CarryoverIndicatorComponent
@@ -393,6 +399,7 @@ export function BalanceWithCarryover({
             />
           )}
           {shouldInlineGoalStatus &&
+            !hasFunding &&
             isGoalTemplatesEnabled &&
             goalValue !== null && (
               <>

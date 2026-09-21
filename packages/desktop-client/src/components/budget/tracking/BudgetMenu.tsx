@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next';
 
 import { Menu } from '@actual-app/components/menu';
 
+import { useCategoryFunding } from '#components/budget/goals/CategoryFundingContext';
+import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 
 type BudgetMenuProps = Omit<
   ComponentPropsWithoutRef<typeof Menu>,
   'onMenuSelect' | 'items'
 > & {
+  onFunded?: () => void;
   onCopyLastMonthAverage: () => void;
   onSetMonthsAverage: (numberOfMonths: number) => void;
   onApplyBudgetTemplate: () => void;
@@ -17,12 +20,14 @@ type BudgetMenuProps = Omit<
 };
 export function BudgetMenu({
   onCopyLastMonthAverage,
+  onFunded,
   onSetMonthsAverage,
   onApplyBudgetTemplate,
   onCopyUntilYearEnd,
   ...props
 }: BudgetMenuProps) {
   const { t } = useTranslation();
+  const fundingState = useCategoryFunding();
   const isGoalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
   const onMenuSelect = (name: string) => {
     switch (name) {
@@ -50,39 +55,44 @@ export function BudgetMenu({
   };
 
   return (
-    <Menu
-      {...props}
-      onMenuSelect={onMenuSelect}
-      items={[
-        {
-          name: 'copy-single-last',
-          text: t("Copy last month's budget"),
-        },
-        {
-          name: 'set-single-3-avg',
-          text: t('Set to 3 month average'),
-        },
-        {
-          name: 'set-single-6-avg',
-          text: t('Set to 6 month average'),
-        },
-        {
-          name: 'set-single-12-avg',
-          text: t('Set to yearly average'),
-        },
-        {
-          name: 'copy-until-year-end',
-          text: t('Copy until year end'),
-        },
-        ...(isGoalTemplatesEnabled
-          ? [
-              {
-                name: 'apply-single-category-template',
-                text: t('Overwrite with template'),
-              },
-            ]
-          : []),
-      ]}
-    />
+    <>
+      {fundingState?.category.is_income && (
+        <CategoryFundingStatus onFunded={onFunded} />
+      )}
+      <Menu
+        {...props}
+        onMenuSelect={onMenuSelect}
+        items={[
+          {
+            name: 'copy-single-last',
+            text: t("Copy last month's budget"),
+          },
+          {
+            name: 'set-single-3-avg',
+            text: t('Set to 3 month average'),
+          },
+          {
+            name: 'set-single-6-avg',
+            text: t('Set to 6 month average'),
+          },
+          {
+            name: 'set-single-12-avg',
+            text: t('Set to yearly average'),
+          },
+          {
+            name: 'copy-until-year-end',
+            text: t('Copy until year end'),
+          },
+          ...(isGoalTemplatesEnabled
+            ? [
+                {
+                  name: 'apply-single-category-template',
+                  text: t('Overwrite with template'),
+                },
+              ]
+            : []),
+        ]}
+      />
+    </>
   );
 }

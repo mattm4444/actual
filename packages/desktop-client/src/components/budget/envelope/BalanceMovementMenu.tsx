@@ -43,6 +43,7 @@ export function BalanceMovementMenu({
       {menu === 'menu' && (
         <BalanceMenu
           categoryId={categoryId}
+          onFunded={onClose}
           onCarryover={carryover => {
             onBudgetAction(month, 'carryover', {
               category: categoryId,

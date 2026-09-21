@@ -103,30 +103,52 @@ export function BalanceCell({
             statusLabel ? `${ariaLabel ?? ''}: ${statusLabel}` : ariaLabel
           }
         >
-          <span style={{ ...badgeStyle, minWidth: 0, maxWidth: columnWidth }}>
+          <span
+            style={{
+              ...badgeStyle,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              minWidth: 0,
+              maxWidth: columnWidth,
+            }}
+          >
             {statusIcon}
-            <PrivacyFilter>
-              <AutoTextSize
-                key={value}
-                as={Text}
-                minFontSizePx={6}
-                maxFontSizePx={12}
-                mode="oneline"
-                className={cx(
-                  defaultClassName,
-                  css({
-                    ...styles.tnum,
-                    maxWidth: badgeStyle
-                      ? `calc(${columnWidth} - 30px)`
-                      : columnWidth,
-                    textAlign: 'right',
-                    fontSize: 12,
-                  }),
-                )}
-              >
-                {format(value, type)}
-              </AutoTextSize>
-            </PrivacyFilter>
+            {/* AutoTextSize changes its parent's alignment; isolate it from the icon. */}
+            <span
+              style={{
+                minWidth: 0,
+                maxWidth: badgeStyle
+                  ? `calc(${columnWidth} - 30px)`
+                  : columnWidth,
+              }}
+            >
+              <PrivacyFilter>
+                <AutoTextSize
+                  key={value}
+                  as={Text}
+                  minFontSizePx={6}
+                  maxFontSizePx={12}
+                  mode="oneline"
+                  className={cx(
+                    defaultClassName,
+                    css({
+                      ...styles.tnum,
+                      maxWidth: badgeStyle
+                        ? `calc(${columnWidth} - 30px)`
+                        : columnWidth,
+                      textAlign: 'right',
+                      lineHeight: '18px',
+                      display: 'block',
+                      fontSize: 12,
+                    }),
+                  )}
+                >
+                  {format(value, type)}
+                </AutoTextSize>
+              </PrivacyFilter>
+            </span>
           </span>
         </Button>
       )}

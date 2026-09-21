@@ -12,6 +12,7 @@ import {
   CarryoverIndicator,
 } from '#components/budget/BalanceWithCarryover';
 import { BalanceMenu } from '#components/budget/envelope/BalanceMenu';
+import { CategoryFundingProvider } from '#components/budget/goals/CategoryFundingContext';
 import {
   Modal,
   ModalCloseButton,
@@ -23,12 +24,13 @@ import { useCategory } from '#hooks/useCategory';
 import type { Modal as ModalType } from '#modals/modalsSlice';
 import { envelopeBudget } from '#spreadsheet/bindings';
 
-type EnvelopeBalanceMenuModalProps = Omit<
-  Extract<ModalType, { name: 'envelope-balance-menu' }>['options'],
-  'month'
->;
+type EnvelopeBalanceMenuModalProps = Extract<
+  ModalType,
+  { name: 'envelope-balance-menu' }
+>['options'];
 
 export function EnvelopeBalanceMenuModal({
+  month,
   categoryId,
   onCarryover,
   onTransfer,
@@ -48,68 +50,70 @@ export function EnvelopeBalanceMenuModal({
   }
 
   return (
-    <Modal name="envelope-balance-menu">
-      {({ state }) => (
-        <>
-          <ModalHeader
-            title={<ModalTitle title={category.name} shrinkOnOverflow />}
-            rightContent={<ModalCloseButton onPress={() => state.close()} />}
-          />
-          <View
-            style={{
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: 20,
-            }}
-          >
-            <Text
+    <CategoryFundingProvider category={category} month={month}>
+      <Modal name="envelope-balance-menu">
+        {({ state }) => (
+          <>
+            <ModalHeader
+              title={<ModalTitle title={category.name} shrinkOnOverflow />}
+              rightContent={<ModalCloseButton onPress={() => state.close()} />}
+            />
+            <View
               style={{
-                fontSize: 17,
-                fontWeight: 400,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 20,
               }}
             >
-              <Trans>Balance</Trans>
-            </Text>
-            <BalanceWithCarryover
-              isDisabled
-              shouldInlineGoalStatus
-              carryover={envelopeBudget.catCarryover(categoryId)}
-              balance={envelopeBudget.catBalance(categoryId)}
-              goal={envelopeBudget.catGoal(categoryId)}
-              budgeted={envelopeBudget.catBudgeted(categoryId)}
-              longGoal={envelopeBudget.catLongGoal(categoryId)}
-              CarryoverIndicator={({ style }) => (
-                <CarryoverIndicator
-                  style={{
-                    width: 15,
-                    height: 15,
-                    display: 'inline-flex',
-                    position: 'relative',
-                    ...style,
-                  }}
-                />
-              )}
-            >
-              {props => (
-                <CellValueText
-                  {...props}
-                  style={{
-                    textAlign: 'center',
-                    ...styles.veryLargeText,
-                  }}
-                />
-              )}
-            </BalanceWithCarryover>
-          </View>
-          <BalanceMenu
-            categoryId={categoryId}
-            getItemStyle={() => defaultMenuItemStyle}
-            onCarryover={onCarryover}
-            onTransfer={onTransfer}
-            onCover={onCover}
-          />
-        </>
-      )}
-    </Modal>
+              <Text
+                style={{
+                  fontSize: 17,
+                  fontWeight: 400,
+                }}
+              >
+                <Trans>Balance</Trans>
+              </Text>
+              <BalanceWithCarryover
+                isDisabled
+                shouldInlineGoalStatus
+                carryover={envelopeBudget.catCarryover(categoryId)}
+                balance={envelopeBudget.catBalance(categoryId)}
+                goal={envelopeBudget.catGoal(categoryId)}
+                budgeted={envelopeBudget.catBudgeted(categoryId)}
+                longGoal={envelopeBudget.catLongGoal(categoryId)}
+                CarryoverIndicator={({ style }) => (
+                  <CarryoverIndicator
+                    style={{
+                      width: 15,
+                      height: 15,
+                      display: 'inline-flex',
+                      position: 'relative',
+                      ...style,
+                    }}
+                  />
+                )}
+              >
+                {props => (
+                  <CellValueText
+                    {...props}
+                    style={{
+                      textAlign: 'center',
+                      ...styles.veryLargeText,
+                    }}
+                  />
+                )}
+              </BalanceWithCarryover>
+            </View>
+            <BalanceMenu
+              categoryId={categoryId}
+              getItemStyle={() => defaultMenuItemStyle}
+              onCarryover={onCarryover}
+              onTransfer={onTransfer}
+              onCover={onCover}
+            />
+          </>
+        )}
+      </Modal>
+    </CategoryFundingProvider>
   );
 }
