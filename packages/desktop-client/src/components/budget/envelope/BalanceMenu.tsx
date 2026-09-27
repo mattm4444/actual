@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Menu } from '@actual-app/components/menu';
 
+import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { envelopeBudget } from '#spreadsheet/bindings';
 
 import { useEnvelopeSheetValue } from './EnvelopeBudgetComponents';
@@ -12,6 +13,7 @@ type BalanceMenuProps = Omit<
   ComponentPropsWithoutRef<typeof Menu>,
   'onMenuSelect' | 'items'
 > & {
+  onFunded?: () => void;
   categoryId: string;
   onTransfer?: () => void;
   onCarryover?: (carryOver: boolean) => void;
@@ -20,6 +22,7 @@ type BalanceMenuProps = Omit<
 
 export function BalanceMenu({
   categoryId,
+  onFunded,
   onTransfer,
   onCarryover,
   onCover,
@@ -34,47 +37,50 @@ export function BalanceMenu({
     useEnvelopeSheetValue(envelopeBudget.catBalance(categoryId)) ?? 0;
 
   return (
-    <Menu
-      {...props}
-      onMenuSelect={name => {
-        switch (name) {
-          case 'transfer':
-            onTransfer?.();
-            break;
-          case 'carryover':
-            onCarryover?.(!carryover);
-            break;
-          case 'cover':
-            onCover?.();
-            break;
-          default:
-            throw new Error(`Unrecognized menu option: ${name}`);
-        }
-      }}
-      items={[
-        ...(balance > 0
-          ? [
-              {
-                name: 'transfer',
-                text: t('Transfer to another category'),
-              },
-            ]
-          : []),
-        ...(balance < 0
-          ? [
-              {
-                name: 'cover',
-                text: t('Cover overspending'),
-              },
-            ]
-          : []),
-        {
-          name: 'carryover',
-          text: carryover
-            ? t('Remove overspending rollover')
-            : t('Rollover overspending'),
-        },
-      ]}
-    />
+    <>
+      <CategoryFundingStatus onFunded={onFunded} />
+      <Menu
+        {...props}
+        onMenuSelect={name => {
+          switch (name) {
+            case 'transfer':
+              onTransfer?.();
+              break;
+            case 'carryover':
+              onCarryover?.(!carryover);
+              break;
+            case 'cover':
+              onCover?.();
+              break;
+            default:
+              throw new Error(`Unrecognized menu option: ${name}`);
+          }
+        }}
+        items={[
+          ...(balance > 0
+            ? [
+                {
+                  name: 'transfer',
+                  text: t('Transfer to another category'),
+                },
+              ]
+            : []),
+          ...(balance < 0
+            ? [
+                {
+                  name: 'cover',
+                  text: t('Cover overspending'),
+                },
+              ]
+            : []),
+          {
+            name: 'carryover',
+            text: carryover
+              ? t('Remove overspending rollover')
+              : t('Rollover overspending'),
+          },
+        ]}
+      />
+    </>
   );
 }

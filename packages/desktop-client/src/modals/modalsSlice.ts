@@ -505,6 +505,7 @@ export type Modal =
       options: {
         categoryId: CategoryEntity['id'];
         month: string;
+        onShowActivity?: () => void;
         onCarryover: (carryover: boolean) => void;
       };
     }

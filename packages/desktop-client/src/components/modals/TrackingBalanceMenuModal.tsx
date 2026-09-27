@@ -11,6 +11,7 @@ import {
   BalanceWithCarryover,
   CarryoverIndicator,
 } from '#components/budget/BalanceWithCarryover';
+import { CategoryFundingProvider } from '#components/budget/goals/CategoryFundingContext';
 import { BalanceMenu } from '#components/budget/tracking/BalanceMenu';
 import {
   Modal,
@@ -23,13 +24,15 @@ import { useCategory } from '#hooks/useCategory';
 import type { Modal as ModalType } from '#modals/modalsSlice';
 import { trackingBudget } from '#spreadsheet/bindings';
 
-type TrackingBalanceMenuModalProps = Omit<
-  Extract<ModalType, { name: 'tracking-balance-menu' }>['options'],
-  'month'
->;
+type TrackingBalanceMenuModalProps = Extract<
+  ModalType,
+  { name: 'tracking-balance-menu' }
+>['options'];
 
 export function TrackingBalanceMenuModal({
+  month,
   categoryId,
+  onShowActivity,
   onCarryover,
 }: TrackingBalanceMenuModalProps) {
   const defaultMenuItemStyle: CSSProperties = {
@@ -46,65 +49,73 @@ export function TrackingBalanceMenuModal({
   }
 
   return (
-    <Modal name="tracking-balance-menu">
-      {({ state }) => (
-        <>
-          <ModalHeader
-            title={<ModalTitle title={category.name} shrinkOnOverflow />}
-            rightContent={<ModalCloseButton onPress={() => state.close()} />}
-          />
-          <View
-            style={{
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: 20,
-            }}
-          >
-            <Text
+    <CategoryFundingProvider category={category} month={month}>
+      <Modal name="tracking-balance-menu">
+        {({ state }) => (
+          <>
+            <ModalHeader
+              title={<ModalTitle title={category.name} shrinkOnOverflow />}
+              rightContent={<ModalCloseButton onPress={() => state.close()} />}
+            />
+            <View
               style={{
-                fontSize: 17,
-                fontWeight: 400,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 20,
               }}
             >
-              <Trans>Balance</Trans>
-            </Text>
-            <BalanceWithCarryover
-              isDisabled
-              carryover={trackingBudget.catCarryover(categoryId)}
-              balance={trackingBudget.catBalance(categoryId)}
-              goal={trackingBudget.catGoal(categoryId)}
-              budgeted={trackingBudget.catBudgeted(categoryId)}
-              longGoal={trackingBudget.catLongGoal(categoryId)}
-              CarryoverIndicator={({ style }) => (
-                <CarryoverIndicator
-                  style={{
-                    width: 15,
-                    height: 15,
-                    display: 'inline-flex',
-                    position: 'relative',
-                    ...style,
-                  }}
-                />
-              )}
-            >
-              {props => (
-                <CellValueText
-                  {...props}
-                  style={{
-                    textAlign: 'center',
-                    ...styles.veryLargeText,
-                  }}
-                />
-              )}
-            </BalanceWithCarryover>
-          </View>
-          <BalanceMenu
-            categoryId={categoryId}
-            getItemStyle={() => defaultMenuItemStyle}
-            onCarryover={onCarryover}
-          />
-        </>
-      )}
-    </Modal>
+              <Text
+                style={{
+                  fontSize: 17,
+                  fontWeight: 400,
+                }}
+              >
+                <Trans>Balance</Trans>
+              </Text>
+              <BalanceWithCarryover
+                isDisabled
+                carryover={trackingBudget.catCarryover(categoryId)}
+                balance={
+                  category.is_income
+                    ? trackingBudget.catSumAmount(categoryId)
+                    : trackingBudget.catBalance(categoryId)
+                }
+                goal={trackingBudget.catGoal(categoryId)}
+                budgeted={trackingBudget.catBudgeted(categoryId)}
+                longGoal={trackingBudget.catLongGoal(categoryId)}
+                CarryoverIndicator={({ style }) => (
+                  <CarryoverIndicator
+                    style={{
+                      width: 15,
+                      height: 15,
+                      display: 'inline-flex',
+                      position: 'relative',
+                      ...style,
+                    }}
+                  />
+                )}
+              >
+                {props => (
+                  <CellValueText
+                    {...props}
+                    style={{
+                      textAlign: 'center',
+                      ...styles.veryLargeText,
+                    }}
+                  />
+                )}
+              </BalanceWithCarryover>
+            </View>
+            <BalanceMenu
+              categoryId={categoryId}
+              isIncome={category.is_income}
+              onShowActivity={onShowActivity}
+              getItemStyle={() => defaultMenuItemStyle}
+              onCarryover={onCarryover}
+            />
+          </>
+        )}
+      </Modal>
+    </CategoryFundingProvider>
   );
 }

@@ -2,6 +2,7 @@
 import React from 'react';
 import type { ComponentProps } from 'react';
 
+import { View } from '@actual-app/components/view';
 import type { CategoryEntity } from '@actual-app/core/types/models';
 
 import { DropHighlight, useDraggable, useDroppable } from '#components/sort';
@@ -9,6 +10,7 @@ import type { OnDragChangeCallback, OnDropCallback } from '#components/sort';
 import { Row } from '#components/table';
 import { useDragRef } from '#hooks/useDragRef';
 
+import { CategoryFundingProvider } from './goals/CategoryFundingContext';
 import { RenderMonths } from './RenderMonths';
 import { SidebarCategory } from './SidebarCategory';
 
@@ -62,6 +64,9 @@ export function IncomeCategory({
       innerRef={dropRef}
       collapsed
       style={{
+        height: 'auto',
+        flex: '0 0 auto',
+        minHeight: 32,
         opacity: cat.hidden ? 0.5 : undefined,
       }}
     >
@@ -82,19 +87,23 @@ export function IncomeCategory({
       />
       <RenderMonths>
         {({ month }) => (
-          <MonthComponent
-            month={month}
-            editing={
-              editingCell &&
-              editingCell.id === cat.id &&
-              editingCell.cell === month
-            }
-            category={cat}
-            isLast={isLast}
-            onEdit={onEditMonth}
-            onBudgetAction={onBudgetAction}
-            onShowActivity={onShowActivity}
-          />
+          <CategoryFundingProvider category={cat} month={month}>
+            <View style={{ height: 32, flexShrink: 0 }}>
+              <MonthComponent
+                month={month}
+                editing={
+                  editingCell &&
+                  editingCell.id === cat.id &&
+                  editingCell.cell === month
+                }
+                category={cat}
+                isLast={isLast}
+                onEdit={onEditMonth}
+                onBudgetAction={onBudgetAction}
+                onShowActivity={onShowActivity}
+              />
+            </View>
+          </CategoryFundingProvider>
         )}
       </RenderMonths>
     </Row>
