@@ -64,6 +64,7 @@ export type BudgetHandlers = {
   'budget/set-category-automations': typeof goalActions.storeTemplates;
   'budget/dry-run-category-template': typeof goalActions.dryRunCategoryTemplate;
   'budget/category-funding': typeof goalActions.getCategoryFunding;
+  'budget/monthly-category-funding': typeof goalActions.getMonthlyCategoryFunding;
   'budget/fund-category': typeof goalActions.fundCategory;
   'budget/store-note-templates': typeof goalNoteActions.storeNoteTemplates;
   'budget/store-note-cleanups': typeof storeNoteCleanups;
@@ -75,6 +76,10 @@ export const app = createApp<BudgetHandlers>();
 
 app.method('budget/budget-amount', mutator(undoable(actions.setBudget)));
 app.method('budget/category-funding', goalActions.getCategoryFunding);
+app.method(
+  'budget/monthly-category-funding',
+  goalActions.getMonthlyCategoryFunding,
+);
 app.method('budget/fund-category', mutator(undoable(goalActions.fundCategory)));
 app.method(
   'budget/copy-previous-month',

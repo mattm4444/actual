@@ -12,7 +12,7 @@ import * as monthUtils from '@actual-app/core/shared/months';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useBudgetActions } from '#budget/mutations';
-import { fundingQueries } from '#budget/queries';
+import { invalidateFundingQueries } from '#budget/queries';
 import { FinancialText } from '#components/FinancialText';
 import { PrivacyFilter } from '#components/PrivacyFilter';
 import { useFormat } from '#hooks/useFormat';
@@ -57,7 +57,7 @@ function EnabledCategoryFundingStatus({
         type: 'fund-category',
         args: { category: category.id },
       });
-      await queryClient.invalidateQueries({ queryKey: fundingQueries.all() });
+      await invalidateFundingQueries(queryClient);
       if (result && 'funded' in result && result.funded) {
         showUndoNotification({ message: t('Budget automation applied.') });
         onFunded?.();
