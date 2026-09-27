@@ -30,6 +30,30 @@ import {
 import { runSchedule } from './schedule-template';
 import { getActiveSchedules } from './statements';
 
+export type TemplatePreferences = {
+  currencyCode: string;
+  hideFraction: boolean;
+  isTracking: boolean;
+};
+
+export async function getTemplatePreferences(): Promise<TemplatePreferences> {
+  const hideDecimal = await aqlQuery(
+    q('preferences').filter({ id: 'hideFraction' }).select('*'),
+  );
+  const currencyPref = await aqlQuery(
+    q('preferences').filter({ id: 'defaultCurrencyCode' }).select('*'),
+  );
+  return {
+    isTracking: isTrackingBudget(),
+    currencyCode:
+      currencyPref.data.length > 0 ? currencyPref.data[0].value : '',
+    hideFraction:
+      hideDecimal.data.length > 0
+        ? hideDecimal.data[0].value === 'true'
+        : false,
+  };
+}
+
 export class CategoryTemplateContext {
   /*----------------------------------------------------------------------------
    * Using This Class:
@@ -56,7 +80,15 @@ export class CategoryTemplateContext {
     month: string,
     budgeted: number,
     skipAvailableClamp: boolean = false,
+    preferences?: TemplatePreferences,
   ) {
+    // Saved/synced goal_def JSON bypasses the note grammar.
+    for (const template of templates) {
+      if (template.type === 'periodic') {
+        CategoryTemplateContext.checkPeriodicInterval(template);
+      }
+    }
+
     // get all the needed setup values
     const lastMonthSheet = monthUtils.sheetForMonth(
       monthUtils.subMonths(month, 1),
@@ -73,7 +105,7 @@ export class CategoryTemplateContext {
     if (
       (fromLastMonth < 0 && !carryover) || // overspend no carryover
       category.is_income || // tracking budget income categories
-      (isTrackingBudget() && !carryover) // tracking budget regular categories
+      ((preferences?.isTracking ?? isTrackingBudget()) && !carryover) // tracking budget regular categories
     ) {
       fromLastMonth = 0;
     }
@@ -82,15 +114,8 @@ export class CategoryTemplateContext {
     await CategoryTemplateContext.checkByAndScheduleAndSpend(templates, month);
     await CategoryTemplateContext.checkPercentage(templates);
 
-    const hideDecimal = await aqlQuery(
-      q('preferences').filter({ id: 'hideFraction' }).select('*'),
-    );
-
-    const currencyPref = await aqlQuery(
-      q('preferences').filter({ id: 'defaultCurrencyCode' }).select('*'),
-    );
-    const currencyCode =
-      currencyPref.data.length > 0 ? currencyPref.data[0].value : '';
+    const { currencyCode, hideFraction } =
+      preferences ?? (await getTemplatePreferences());
 
     // call the private constructor
     return new CategoryTemplateContext(
@@ -100,9 +125,7 @@ export class CategoryTemplateContext {
       fromLastMonth,
       budgeted,
       currencyCode,
-      hideDecimal.data.length > 0
-        ? hideDecimal.data[0].value === 'true'
-        : false,
+      hideFraction,
       skipAvailableClamp,
     );
   }
@@ -468,6 +491,13 @@ export class CategoryTemplateContext {
 
   //-----------------------------------------------------------------------------
   //  Template Validation
+  private static checkPeriodicInterval(template: PeriodicTemplate) {
+    const interval = template.period?.amount;
+    if (!Number.isSafeInteger(interval) || interval < 1) {
+      throw new Error('Periodic template interval must be a positive integer');
+    }
+  }
+
   static async checkByAndScheduleAndSpend(
     templates: Template[],
     month: string,
@@ -701,6 +731,7 @@ export class CategoryTemplateContext {
     template: PeriodicTemplate,
     templateContext: CategoryTemplateContext,
   ): number {
+    CategoryTemplateContext.checkPeriodicInterval(template);
     let toBudget = 0;
     const amount = amountToInteger(
       template.amount,
@@ -713,7 +744,7 @@ export class CategoryTemplateContext {
         ? template.starting
         : monthUtils.firstDayOfMonth(templateContext.month);
 
-    let dateShiftFunction;
+    let dateShiftFunction: (date: string, numPeriods: number) => string;
     switch (period) {
       case 'day':
         dateShiftFunction = monthUtils.addDays;
@@ -733,9 +764,17 @@ export class CategoryTemplateContext {
         throw new Error(`Unrecognized periodic period: ${String(period)}`);
     }
 
+    function advanceDate(current: string): string {
+      const next = dateShiftFunction(current, numPeriods);
+      if (!monthUtils.isAfter(next, current)) {
+        throw new Error('Periodic template interval must advance the date');
+      }
+      return next;
+    }
+
     //shift the starting date until its in our month or in the future
     while (templateContext.month > date) {
-      date = dateShiftFunction(date, numPeriods);
+      date = advanceDate(date);
     }
 
     if (
@@ -747,7 +786,7 @@ export class CategoryTemplateContext {
     const nextMonth = monthUtils.addMonths(templateContext.month, 1);
     while (date < nextMonth) {
       toBudget += amount;
-      date = dateShiftFunction(date, numPeriods);
+      date = advanceDate(date);
     }
 
     return toBudget;

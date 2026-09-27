@@ -3,4 +3,4 @@ category: Features
 authors: [mattm4444]
 ---
 
-Show live category funding badges in compact category rows and a desktop Fund action that fills the automation shortfall even when it increases the overbudgeted amount.
+Show goal progress and an assign-money action in category balance menus on desktop and mobile while keeping budget rows compact.

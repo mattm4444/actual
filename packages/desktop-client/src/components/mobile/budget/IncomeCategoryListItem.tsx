@@ -153,15 +153,9 @@ function IncomeCategoryCells({
           binding={balance}
           category={category}
           onPress={onPress}
-          aria-label={
-            budgetType === 'envelope'
-              ? t('Open balance menu for {{categoryName}} category', {
-                  categoryName: category.name,
-                })
-              : t('Show transactions for {{categoryName}} category', {
-                  categoryName: category.name,
-                })
-          }
+          aria-label={t('Open balance menu for {{categoryName}} category', {
+            categoryName: category.name,
+          })}
         />
       </View>
     </View>
@@ -186,7 +180,10 @@ export function IncomeCategoryListItem({
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
-  const balanceMenuModalName = `envelope-income-balance-menu`;
+  const balanceMenuModalName =
+    budgetType === 'tracking'
+      ? 'tracking-balance-menu'
+      : 'envelope-income-balance-menu';
 
   const onShowActivity = useCallback(() => {
     if (!category) {
@@ -269,9 +266,7 @@ export function IncomeCategoryListItem({
             category={category}
             month={month}
             onBudgetAction={onBudgetAction}
-            onPress={
-              budgetType === 'envelope' ? onOpenBalanceMenu : onShowActivity
-            }
+            onPress={onOpenBalanceMenu}
           />
         </View>
       </CategoryFundingProvider>

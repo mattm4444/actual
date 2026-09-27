@@ -63,17 +63,19 @@ beforeEach(() => {
   });
   read = vi.fn(async () => funding);
   initServer({
-    'budget/category-funding': read,
+    'budget/monthly-category-funding': async () => ({
+      [category.id]: { funding: await read() },
+    }),
     'budget/fund-category': fund,
     query: async () => ({ data: [], dependencies: [] }),
   });
 });
 
-function renderStatus(cat = category) {
+function renderStatus(cat = category, onFunded?: () => void) {
   return render(
     <TestProviders queryClient={client} store={store}>
       <CategoryFundingProvider category={cat} month="2024-01">
-        <CategoryFundingStatus />
+        <CategoryFundingStatus onFunded={onFunded} />
       </CategoryFundingProvider>
     </TestProviders>,
   );
@@ -94,7 +96,9 @@ it.each([
     renderStatus();
     expect(await screen.findByText(amount + ' needed')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Fund Groceries for January 2024' }),
+      screen.getByRole('button', {
+        name: 'Assign money to underfunded goal: Groceries for January 2024',
+      }),
     ).toBeEnabled();
   },
 );
@@ -120,7 +124,7 @@ it('is keyboard reachable, has a category and month label, and refreshes after f
   };
   renderStatus();
   const button = await screen.findByRole('button', {
-    name: 'Fund Groceries for January 2024',
+    name: 'Assign money to underfunded goal: Groceries for January 2024',
   });
   await user.tab();
   expect(button).toHaveFocus();
@@ -163,7 +167,11 @@ it('allows an explicit Fund action for the full recommendation with no available
   };
   renderStatus();
   expect(await screen.findByText('250.00 needed')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Fund Groceries/ })).toBeEnabled();
+  expect(
+    screen.getByRole('button', {
+      name: /Assign money to underfunded goal: Groceries/,
+    }),
+  ).toBeEnabled();
 });
 
 it('shows an unavailable state when the engine cannot calculate, never a funded check', async () => {
@@ -179,7 +187,9 @@ it('preserves underfunding and normal error notification if the mutation fails',
   const user = userEvent.setup();
   renderStatus();
   await user.click(
-    await screen.findByRole('button', { name: /Fund Groceries/ }),
+    await screen.findByRole('button', {
+      name: /Assign money to underfunded goal: Groceries/,
+    }),
   );
   await waitFor(() =>
     expect(store.getState().notifications.notifications).toHaveLength(1),
@@ -200,7 +210,9 @@ it('keeps Fund keyboard activation out of the budget cell navigation handler', a
       </div>
     </TestProviders>,
   );
-  const button = await screen.findByRole('button', { name: /Fund Groceries/ });
+  const button = await screen.findByRole('button', {
+    name: /Assign money to underfunded goal: Groceries/,
+  });
   act(() => button.focus());
   await user.keyboard('{Enter}');
   expect(await screen.findByText('Funded')).toBeInTheDocument();
@@ -210,7 +222,9 @@ it('keeps Fund keyboard activation out of the budget cell navigation handler', a
 
 it('preserves keyboard focus while an edit triggers a background refresh', async () => {
   renderStatus();
-  const button = await screen.findByRole('button', { name: /Fund Groceries/ });
+  const button = await screen.findByRole('button', {
+    name: /Assign money to underfunded goal: Groceries/,
+  });
   act(() => button.focus());
   let finishRead: ((value: CategoryFunding | null) => void) | undefined;
   read.mockImplementationOnce(
@@ -291,7 +305,9 @@ it('does not offer Undo when a stale Fund request makes no change', async () => 
   const user = userEvent.setup();
   renderStatus();
   await user.click(
-    await screen.findByRole('button', { name: /Fund Groceries/ }),
+    await screen.findByRole('button', {
+      name: /Assign money to underfunded goal: Groceries/,
+    }),
   );
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
   expect(store.getState().notifications.notifications).toHaveLength(0);
@@ -302,7 +318,9 @@ it('offers mobile Undo only after funding actually changed the budget', async ()
   const user = userEvent.setup();
   renderStatus();
   await user.click(
-    await screen.findByRole('button', { name: /Fund Groceries/ }),
+    await screen.findByRole('button', {
+      name: /Assign money to underfunded goal: Groceries/,
+    }),
   );
   await waitFor(() =>
     expect(store.getState().notifications.notifications).toHaveLength(1),
@@ -311,3 +329,24 @@ it('offers mobile Undo only after funding actually changed the budget', async ()
     'Undo',
   );
 });
+
+it.each([true, false])(
+  'closes the desktop menu only after a successful funding change (%s)',
+  async changed => {
+    const onFunded = vi.fn();
+    fund.mockResolvedValue(changed);
+    renderStatus(category, onFunded);
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Assign money to underfunded goal:/,
+      }),
+    );
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    if (changed) {
+      await waitFor(() => expect(onFunded).toHaveBeenCalledOnce());
+    } else {
+      expect(onFunded).not.toHaveBeenCalled();
+    }
+  },
+);

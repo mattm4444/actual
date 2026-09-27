@@ -13,6 +13,7 @@ import {
   dryRunCategoryTemplate,
   fundCategory,
   getCategoryFunding,
+  getMonthlyCategoryFunding,
 } from './goal-template';
 import * as statements from './statements';
 import { getCategoriesWithTemplates } from './template-notes';
@@ -33,7 +34,10 @@ vi.mock('#server/aql', () => ({ aqlQuery: vi.fn() }));
 vi.mock('#server/sync', () => ({
   batchMessages: (fn: () => Promise<void>) => fn(),
 }));
-vi.mock('./statements', () => ({ getActiveSchedules: vi.fn() }));
+vi.mock('./statements', () => ({
+  getActiveSchedules: vi.fn(),
+  getCategoriesWithTemplateNotes: vi.fn(),
+}));
 vi.mock('./template-notes', () => ({
   getCategoriesWithTemplates: vi.fn(),
   storeNoteTemplates: vi.fn(),
@@ -61,6 +65,16 @@ let rollover: number;
 let carryover: boolean;
 let spent: number;
 let templates: Template[];
+
+// Compare the batch read with the existing independent read throughout the
+// funding scenarios below, including edits, rollover, schedules and priorities.
+async function readFunding(args: Parameters<typeof getCategoryFunding>[0]) {
+  const funding = await getCategoryFunding(args);
+  const monthly = await getMonthlyCategoryFunding({ month: args.month });
+  expect(monthly[args.categoryId]?.funding ?? null).toEqual(funding);
+  expect(monthly[args.categoryId]?.error).toBeUndefined();
+  return funding;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -117,7 +131,7 @@ it.each([
   'a 650-dollar automation with %i budgeted has %i remaining',
   async (amount, remaining) => {
     budgeted = amount;
-    expect(await getCategoryFunding(request)).toMatchObject({
+    expect(await readFunding(request)).toMatchObject({
       recommended: 65000,
       remaining,
     });
@@ -134,7 +148,7 @@ it('funds only this category to the absolute recommendation, and repeated clicks
     category: 'groceries',
     amount: 65000,
   });
-  expect(await getCategoryFunding(request)).toMatchObject({
+  expect(await readFunding(request)).toMatchObject({
     remaining: 0,
     amountToFund: 0,
   });
@@ -144,7 +158,7 @@ it('funds only this category to the absolute recommendation, and repeated clicks
 
 it('rechecks a now-overfunded category and never removes the extra money', async () => {
   budgeted = 40000;
-  expect(await getCategoryFunding(request)).toMatchObject({ remaining: 25000 });
+  expect(await readFunding(request)).toMatchObject({ remaining: 25000 });
   budgeted = 90000;
   await fundCategory(request);
   expect(actions.setBudget).not.toHaveBeenCalled();
@@ -164,20 +178,20 @@ it('uses the refill engine with rollover, rather than cap minus current budget',
   ];
   rollover = 20000;
   budgeted = 10000;
-  expect(await getCategoryFunding(request)).toMatchObject({
+  expect(await readFunding(request)).toMatchObject({
     recommended: 45000,
     remaining: 35000,
   });
   await fundCategory(request);
   expect(budgeted).toBe(45000);
   spent = -30000;
-  expect(await getCategoryFunding(request)).toMatchObject({ remaining: 0 });
+  expect(await readFunding(request)).toMatchObject({ remaining: 0 });
 });
 
 it('does not confuse spending after monthly funding with underfunding', async () => {
   budgeted = 65000;
   spent = -60000;
-  expect(await getCategoryFunding(request)).toMatchObject({ remaining: 0 });
+  expect(await readFunding(request)).toMatchObject({ remaining: 0 });
 });
 
 it('uses save-by-date monthly allocations from the existing engine', async () => {
@@ -194,7 +208,7 @@ it('uses save-by-date monthly allocations from the existing engine', async () =>
   budgeted = 5000;
   const projection = await dryRunCategoryTemplate({ ...request, templates });
   expect(projection.budgeted).toBe(20000);
-  expect(await getCategoryFunding(request)).toMatchObject({
+  expect(await readFunding(request)).toMatchObject({
     recommended: projection.budgeted,
     remaining: 15000,
   });
@@ -248,7 +262,7 @@ it('uses recurring schedules through the real schedule engine', async () => {
     }),
   );
   budgeted = 40000;
-  expect(await getCategoryFunding(request)).toMatchObject({
+  expect(await readFunding(request)).toMatchObject({
     recommended: 65000,
     remaining: 25000,
   });
@@ -262,14 +276,14 @@ it.each([10000, 0, -10000])(
     templates = [{ ...fixed, priority: 1 }];
     budgeted = 40000;
     available = availableBefore;
-    expect(await getCategoryFunding(request)).toMatchObject({
+    expect(await readFunding(request)).toMatchObject({
       remaining: 25000,
       amountToFund: 25000,
     });
     expect(await fundCategory(request)).toBe(true);
     expect(budgeted).toBe(65000);
     expect(available).toBe(availableBefore - 25000);
-    expect(await getCategoryFunding(request)).toMatchObject({
+    expect(await readFunding(request)).toMatchObject({
       remaining: 0,
       amountToFund: 0,
     });
@@ -286,7 +300,7 @@ it('funds future monthly demand even with no available funds', async () => {
   templates = [{ ...fixed, priority: 1 }];
   available = 0;
   const future = { ...request, month: '2027-01' };
-  expect(await getCategoryFunding(future)).toMatchObject({
+  expect(await readFunding(future)).toMatchObject({
     remaining: 65000,
     amountToFund: 65000,
   });
@@ -319,12 +333,12 @@ it('uses balance caps and does not remove carried-over excess', async () => {
     { ...fixed, limit: { amount: 700, period: 'monthly', hold: false } },
   ];
   rollover = 60000;
-  expect(await getCategoryFunding(request)).toMatchObject({
+  expect(await readFunding(request)).toMatchObject({
     recommended: 10000,
     remaining: 10000,
   });
   rollover = 80000;
-  expect(await getCategoryFunding(request)).toMatchObject({
+  expect(await readFunding(request)).toMatchObject({
     recommended: -10000,
     remaining: 0,
   });
@@ -345,7 +359,7 @@ it.each([false, true])(
     ];
     rollover = -10000;
     carryover = flag;
-    expect(await getCategoryFunding(request)).toMatchObject({
+    expect(await readFunding(request)).toMatchObject({
       recommended: flag ? 75000 : 65000,
     });
   },
@@ -372,7 +386,7 @@ it.each(
   'does not invent monthly funding for definitions without an allocating automation',
   async definitions => {
     templates = definitions;
-    expect(await getCategoryFunding(request)).toBeNull();
+    expect(await readFunding(request)).toBeNull();
     await fundCategory(request);
     expect(actions.setBudget).not.toHaveBeenCalled();
   },
@@ -419,7 +433,7 @@ it('reads note templates using the existing parser entry point without saving de
   vi.mocked(getCategoriesWithTemplates).mockResolvedValue([
     { id: category.id, name: category.name, templates: [fixed] },
   ]);
-  expect(await getCategoryFunding(request)).toMatchObject({ remaining: 65000 });
+  expect(await readFunding(request)).toMatchObject({ remaining: 65000 });
   expect(getCategoriesWithTemplates).toHaveBeenCalledWith([category.id]);
 });
 
@@ -434,27 +448,28 @@ it('uses the periodic engine to distinguish an off-month from the next allocatio
       directive: 'template',
     },
   ];
-  expect(await getCategoryFunding(request)).toMatchObject({
+  expect(await readFunding(request)).toMatchObject({
     recommended: 0,
     remaining: 0,
     amountToFund: 0,
   });
   await fundCategory(request);
   expect(actions.setBudget).not.toHaveBeenCalled();
-  expect(
-    await getCategoryFunding({ ...request, month: '2024-02' }),
-  ).toMatchObject({ recommended: 65000, remaining: 65000 });
+  expect(await readFunding({ ...request, month: '2024-02' })).toMatchObject({
+    recommended: 65000,
+    remaining: 65000,
+  });
 });
 
 it('rechecks replaced and removed automations before a stale Fund request', async () => {
-  expect(await getCategoryFunding(request)).toMatchObject({ remaining: 65000 });
+  expect(await readFunding(request)).toMatchObject({ remaining: 65000 });
   templates = [{ ...fixed, monthly: 200 }];
   await fundCategory(request);
   expect(budgeted).toBe(20000);
   templates = [];
   await fundCategory(request);
   expect(actions.setBudget).toHaveBeenCalledTimes(1);
-  expect(await getCategoryFunding(request)).toBeNull();
+  expect(await readFunding(request)).toBeNull();
 });
 
 it.each([false, true])(
@@ -462,7 +477,7 @@ it.each([false, true])(
   async tracking => {
     category.is_income = true;
     vi.mocked(actions.isTrackingBudget).mockReturnValue(tracking);
-    const result = await getCategoryFunding(request);
+    const result = await readFunding(request);
     if (tracking) expect(result).toMatchObject({ remaining: 65000 });
     else expect(result).toBeNull();
     await fundCategory(request);
@@ -488,4 +503,182 @@ it('rejects malformed non-finite engine amounts without writing a budget', async
   await expect(getCategoryFunding(request)).rejects.toThrow();
   await expect(fundCategory(request)).rejects.toThrow();
   expect(actions.setBudget).not.toHaveBeenCalled();
+});
+
+describe('untrusted saved automation definitions', () => {
+  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects saved periodic interval %s for both reads and funding without writing',
+    async interval => {
+      templates = [
+        {
+          type: 'periodic',
+          amount: 100,
+          period: { period: 'day', amount: interval },
+          starting: '2023-12-01',
+          directive: 'template',
+          priority: 0,
+        },
+      ];
+      await expect(getCategoryFunding(request)).rejects.toThrow(
+        'Periodic template interval must be a positive integer',
+      );
+      await expect(fundCategory(request)).rejects.toThrow(
+        'Periodic template interval must be a positive integer',
+      );
+      expect(actions.setBudget).not.toHaveBeenCalled();
+      expect(actions.setGoal).not.toHaveBeenCalled();
+      // A malformed category must not leave the worker unable to serve another request.
+      templates = [fixed];
+      expect(await readFunding(request)).toMatchObject({
+        remaining: 65000,
+      });
+    },
+  );
+
+  it.each(['{broken', 'null', '{}', '123'])(
+    'reports an invalid saved definition clearly (%s) without writing',
+    async goalDef => {
+      vi.mocked(aql.aqlQuery).mockResolvedValue({
+        data: [{ ...category, goal_def: goalDef }],
+        dependencies: [],
+      });
+      await expect(getCategoryFunding(request)).rejects.toThrow(
+        'Invalid saved budget automation definition',
+      );
+      await expect(fundCategory(request)).rejects.toThrow(
+        'Invalid saved budget automation definition',
+      );
+      expect(actions.setBudget).not.toHaveBeenCalled();
+      expect(actions.setGoal).not.toHaveBeenCalled();
+    },
+  );
+
+  it('fails closed for a zero-interval legacy note using the real note parser', async () => {
+    const actualNotes = await vi.importActual<{
+      getCategoriesWithTemplates: typeof getCategoriesWithTemplates;
+    }>('./template-notes');
+    vi.mocked(getCategoriesWithTemplates).mockImplementation(
+      actualNotes.getCategoriesWithTemplates,
+    );
+    vi.mocked(statements.getCategoriesWithTemplateNotes).mockResolvedValue([
+      {
+        id: category.id,
+        name: category.name,
+        note: '#template 100 repeat every 0 days starting 2026-09-01',
+      },
+    ]);
+    vi.mocked(aql.aqlQuery).mockResolvedValue({
+      data: [{ ...category, template_settings: { source: 'notes' } }],
+      dependencies: [],
+    });
+    const september = { ...request, month: '2026-09' };
+    await expect(getCategoryFunding(september)).rejects.toThrow(
+      'Invalid budget automation',
+    );
+    await expect(fundCategory(september)).rejects.toThrow(
+      'Invalid budget automation',
+    );
+    expect(actions.setBudget).not.toHaveBeenCalled();
+    expect(actions.setGoal).not.toHaveBeenCalled();
+  });
+});
+
+it('isolates malformed saved goals from other categories in a monthly refresh', async () => {
+  const originalQuery = vi.mocked(aql.aqlQuery).getMockImplementation();
+  vi.mocked(aql.aqlQuery).mockImplementation(async query => {
+    if (JSON.stringify(query).includes('categories')) {
+      return {
+        data: [
+          { ...category, goal_def: JSON.stringify([fixed]) },
+          { ...category, id: 'broken', goal_def: '{broken' },
+          {
+            ...category,
+            id: 'stalled',
+            goal_def: JSON.stringify([
+              {
+                type: 'periodic',
+                amount: 100,
+                period: { period: 'day', amount: 0 },
+                starting: '2023-12-01',
+                directive: 'template',
+                priority: 0,
+              },
+            ]),
+          },
+        ],
+        dependencies: [],
+      };
+    }
+    return originalQuery
+      ? originalQuery(query)
+      : { data: [], dependencies: [] };
+  });
+  const monthly = await getMonthlyCategoryFunding(request);
+  expect(monthly.groceries.funding).toMatchObject({ remaining: 65000 });
+  expect(monthly.broken).toEqual({
+    funding: null,
+    error: 'Invalid saved budget automation definition',
+  });
+  expect(monthly.stalled.error).toContain('positive integer');
+  expect(actions.setBudget).not.toHaveBeenCalled();
+  expect(actions.setGoal).not.toHaveBeenCalled();
+});
+
+it('keeps remainder projections independent across categories', async () => {
+  const remainder: Template = {
+    type: 'remainder',
+    weight: 1,
+    directive: 'template',
+    priority: null,
+  };
+  const cats = ['first', 'second'].map(id => ({
+    ...category,
+    id,
+    goal_def: JSON.stringify([remainder]),
+  }));
+  const originalQuery = vi.mocked(aql.aqlQuery).getMockImplementation();
+  vi.mocked(aql.aqlQuery).mockImplementation(async query => {
+    if (JSON.stringify(query).includes('categories')) {
+      return { data: cats, dependencies: [] };
+    }
+    return originalQuery
+      ? originalQuery(query)
+      : { data: [], dependencies: [] };
+  });
+  const monthly = await getMonthlyCategoryFunding(request);
+  expect(monthly.first.funding?.recommended).toBe(available);
+  expect(monthly.second.funding?.recommended).toBe(available);
+});
+
+it('loads legacy notes once for a monthly refresh without saving definitions', async () => {
+  const cats = ['first', 'second'].map(id => ({
+    ...category,
+    id,
+    template_settings: { source: 'notes' },
+  }));
+  const originalQuery = vi.mocked(aql.aqlQuery).getMockImplementation();
+  vi.mocked(aql.aqlQuery).mockImplementation(async query => {
+    if (JSON.stringify(query).includes('categories')) {
+      return { data: cats, dependencies: [] };
+    }
+    return originalQuery
+      ? originalQuery(query)
+      : { data: [], dependencies: [] };
+  });
+  vi.mocked(getCategoriesWithTemplates).mockResolvedValue(
+    cats.map((cat, i) => ({
+      id: cat.id,
+      name: cat.name,
+      templates: [{ ...fixed, monthly: 100 * (i + 1) }],
+    })),
+  );
+  const monthly = await getMonthlyCategoryFunding(request);
+  expect(monthly.first.funding?.recommended).toBe(10000);
+  expect(monthly.second.funding?.recommended).toBe(20000);
+  expect(getCategoriesWithTemplates).toHaveBeenCalledExactlyOnceWith([
+    'first',
+    'second',
+  ]);
+  expect(actions.setBudget).not.toHaveBeenCalled();
+  expect(actions.setGoal).not.toHaveBeenCalled();
 });

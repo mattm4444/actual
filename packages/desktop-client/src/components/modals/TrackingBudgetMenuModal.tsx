@@ -15,6 +15,7 @@ import { View } from '@actual-app/components/view';
 import { amountToInteger, integerToAmount } from '@actual-app/core/shared/util';
 import { t } from 'i18next';
 
+import { CategoryFundingProvider } from '#components/budget/goals/CategoryFundingContext';
 import { BudgetMenu } from '#components/budget/tracking/BudgetMenu';
 import { useTrackingSheetValue } from '#components/budget/tracking/TrackingBudgetComponents';
 import {
@@ -89,110 +90,114 @@ export function TrackingBudgetMenuModal({
   }
 
   return (
-    <Modal
-      name="tracking-budget-menu"
-      wrapperProps={{
-        style: mobileCalculatorEnabled ? { paddingBottom: '30vh' } : undefined,
-      }}
-    >
-      {({ state }) => (
-        <>
-          <ModalHeader
-            title={<ModalTitle title={category.name} shrinkOnOverflow />}
-            rightContent={<ModalCloseButton onPress={() => state.close()} />}
-          />
-          <View
-            style={{
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <Text
+    <CategoryFundingProvider category={category} month={month}>
+      <Modal
+        name="tracking-budget-menu"
+        wrapperProps={{
+          style: mobileCalculatorEnabled
+            ? { paddingBottom: '30vh' }
+            : undefined,
+        }}
+      >
+        {({ state }) => (
+          <>
+            <ModalHeader
+              title={<ModalTitle title={category.name} shrinkOnOverflow />}
+              rightContent={<ModalCloseButton onPress={() => state.close()} />}
+            />
+            <View
               style={{
-                fontSize: 17,
-                fontWeight: 400,
+                justifyContent: 'center',
+                alignItems: 'center',
               }}
             >
-              <Trans>Budgeted</Trans>
-            </Text>
-            <AmountInput
-              value={integerToAmount(budgeted || 0)}
-              onEnter={() => state.close()}
-              onChange={_onUpdateBudget}
-              data-testid="budget-amount"
-              autoFocus
-              autoFocusDelay={150}
-              variant="large"
-            />
-          </View>
-          <View
-            style={{
-              display: showMore ? 'none' : undefined,
-              overflowY: 'auto',
-              flex: 1,
-            }}
-          >
-            <Notes
-              notes={originalNotes.length > 0 ? originalNotes : t('No notes')}
-              editable={false}
-              focused={false}
-              getStyle={() => ({
-                borderRadius: 6,
-                ...(originalNotes.length === 0 && {
-                  justifySelf: 'center',
-                  alignSelf: 'center',
-                  color: theme.pageTextSubdued,
-                }),
-              })}
-            />
-          </View>
-          <View
-            style={{
-              display: showMore ? 'none' : undefined,
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              alignContent: 'space-between',
-            }}
-          >
-            <Button style={buttonStyle} onPress={_onEditNotes}>
-              <SvgNotesPaper
-                width={20}
-                height={20}
-                style={{ paddingRight: 5 }}
+              <Text
+                style={{
+                  fontSize: 17,
+                  fontWeight: 400,
+                }}
+              >
+                <Trans>Budgeted</Trans>
+              </Text>
+              <AmountInput
+                value={integerToAmount(budgeted || 0)}
+                onEnter={() => state.close()}
+                onChange={_onUpdateBudget}
+                data-testid="budget-amount"
+                autoFocus
+                autoFocusDelay={150}
+                variant="large"
               />
-              <Trans>Edit notes</Trans>
-            </Button>
-          </View>
-          <View>
-            <Button variant="bare" style={buttonStyle} onPress={onShowMore}>
-              {!showMore ? (
-                <SvgCheveronUp
-                  width={30}
-                  height={30}
+            </View>
+            <View
+              style={{
+                display: showMore ? 'none' : undefined,
+                overflowY: 'auto',
+                flex: 1,
+              }}
+            >
+              <Notes
+                notes={originalNotes.length > 0 ? originalNotes : t('No notes')}
+                editable={false}
+                focused={false}
+                getStyle={() => ({
+                  borderRadius: 6,
+                  ...(originalNotes.length === 0 && {
+                    justifySelf: 'center',
+                    alignSelf: 'center',
+                    color: theme.pageTextSubdued,
+                  }),
+                })}
+              />
+            </View>
+            <View
+              style={{
+                display: showMore ? 'none' : undefined,
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignContent: 'space-between',
+              }}
+            >
+              <Button style={buttonStyle} onPress={_onEditNotes}>
+                <SvgNotesPaper
+                  width={20}
+                  height={20}
                   style={{ paddingRight: 5 }}
                 />
-              ) : (
-                <SvgCheveronDown
-                  width={30}
-                  height={30}
-                  style={{ paddingRight: 5 }}
-                />
-              )}
-              <Trans>Actions</Trans>
-            </Button>
-          </View>
-          {showMore && (
-            <BudgetMenu
-              getItemStyle={() => defaultMenuItemStyle}
-              onCopyLastMonthAverage={onCopyLastMonthAverage}
-              onSetMonthsAverage={onSetMonthsAverage}
-              onApplyBudgetTemplate={onApplyBudgetTemplate}
-              onCopyUntilYearEnd={onCopyUntilYearEnd}
-            />
-          )}
-        </>
-      )}
-    </Modal>
+                <Trans>Edit notes</Trans>
+              </Button>
+            </View>
+            <View>
+              <Button variant="bare" style={buttonStyle} onPress={onShowMore}>
+                {!showMore ? (
+                  <SvgCheveronUp
+                    width={30}
+                    height={30}
+                    style={{ paddingRight: 5 }}
+                  />
+                ) : (
+                  <SvgCheveronDown
+                    width={30}
+                    height={30}
+                    style={{ paddingRight: 5 }}
+                  />
+                )}
+                <Trans>Actions</Trans>
+              </Button>
+            </View>
+            {showMore && (
+              <BudgetMenu
+                getItemStyle={() => defaultMenuItemStyle}
+                onCopyLastMonthAverage={onCopyLastMonthAverage}
+                onSetMonthsAverage={onSetMonthsAverage}
+                onApplyBudgetTemplate={onApplyBudgetTemplate}
+                onCopyUntilYearEnd={onCopyUntilYearEnd}
+              />
+            )}
+          </>
+        )}
+      </Modal>
+    </CategoryFundingProvider>
   );
 }
