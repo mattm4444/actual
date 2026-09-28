@@ -619,7 +619,9 @@ it('isolates malformed saved goals from other categories in a monthly refresh', 
     funding: null,
     error: 'Invalid saved budget automation definition',
   });
-  expect(monthly.stalled.error).toContain('positive integer');
+  expect(monthly.stalled.error).toContain(
+    'Template repeat interval must be a whole number greater than 0',
+  );
   expect(actions.setBudget).not.toHaveBeenCalled();
   expect(actions.setGoal).not.toHaveBeenCalled();
 });
