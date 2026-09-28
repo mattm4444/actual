@@ -508,10 +508,10 @@ describe('untrusted saved automation definitions', () => {
         },
       ];
       await expect(getCategoryFunding(request)).rejects.toThrow(
-        'Periodic template interval must be a positive integer',
+        'Template repeat interval must be a whole number greater than 0',
       );
       await expect(fundCategory(request)).rejects.toThrow(
-        'Periodic template interval must be a positive integer',
+        'Template repeat interval must be a whole number greater than 0',
       );
       expect(actions.setBudget).not.toHaveBeenCalled();
       expect(actions.setGoal).not.toHaveBeenCalled();
