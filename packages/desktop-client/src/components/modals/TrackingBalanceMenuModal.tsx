@@ -1,7 +1,8 @@
 import React from 'react';
 import type { CSSProperties } from 'react';
-import { Trans } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 
+import { Menu } from '@actual-app/components/menu';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
@@ -11,6 +12,7 @@ import {
   BalanceWithCarryover,
   CarryoverIndicator,
 } from '#components/budget/BalanceWithCarryover';
+import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { BalanceMenu } from '#components/budget/tracking/BalanceMenu';
 import {
   Modal,
@@ -23,15 +25,18 @@ import { useCategory } from '#hooks/useCategory';
 import type { Modal as ModalType } from '#modals/modalsSlice';
 import { trackingBudget } from '#spreadsheet/bindings';
 
-type TrackingBalanceMenuModalProps = Omit<
-  Extract<ModalType, { name: 'tracking-balance-menu' }>['options'],
-  'month'
->;
+type TrackingBalanceMenuModalProps = Extract<
+  ModalType,
+  { name: 'tracking-balance-menu' }
+>['options'];
 
 export function TrackingBalanceMenuModal({
+  month,
   categoryId,
+  onShowActivity,
   onCarryover,
 }: TrackingBalanceMenuModalProps) {
+  const { t } = useTranslation();
   const defaultMenuItemStyle: CSSProperties = {
     ...styles.mobileMenuItem,
     color: theme.menuItemText,
@@ -71,7 +76,11 @@ export function TrackingBalanceMenuModal({
             <BalanceWithCarryover
               isDisabled
               carryover={trackingBudget.catCarryover(categoryId)}
-              balance={trackingBudget.catBalance(categoryId)}
+              balance={
+                category.is_income
+                  ? trackingBudget.catSumAmount(categoryId)
+                  : trackingBudget.catBalance(categoryId)
+              }
               goal={trackingBudget.catGoal(categoryId)}
               budgeted={trackingBudget.catBudgeted(categoryId)}
               longGoal={trackingBudget.catLongGoal(categoryId)}
@@ -98,11 +107,20 @@ export function TrackingBalanceMenuModal({
               )}
             </BalanceWithCarryover>
           </View>
-          <BalanceMenu
-            categoryId={categoryId}
-            getItemStyle={() => defaultMenuItemStyle}
-            onCarryover={onCarryover}
-          />
+          <CategoryFundingStatus category={category} month={month} />
+          {category.is_income ? (
+            <Menu
+              getItemStyle={() => defaultMenuItemStyle}
+              onMenuSelect={() => onShowActivity?.()}
+              items={[{ name: 'view', text: t('View transactions') }]}
+            />
+          ) : (
+            <BalanceMenu
+              categoryId={categoryId}
+              getItemStyle={() => defaultMenuItemStyle}
+              onCarryover={onCarryover}
+            />
+          )}
         </>
       )}
     </Modal>

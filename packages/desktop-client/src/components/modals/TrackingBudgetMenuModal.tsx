@@ -15,6 +15,7 @@ import { View } from '@actual-app/components/view';
 import { amountToInteger, integerToAmount } from '@actual-app/core/shared/util';
 import { t } from 'i18next';
 
+import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { BudgetMenu } from '#components/budget/tracking/BudgetMenu';
 import { useTrackingSheetValue } from '#components/budget/tracking/TrackingBudgetComponents';
 import {
@@ -182,6 +183,9 @@ export function TrackingBudgetMenuModal({
               <Trans>Actions</Trans>
             </Button>
           </View>
+          {showMore && category.is_income && (
+            <CategoryFundingStatus category={category} month={month} />
+          )}
           {showMore && (
             <BudgetMenu
               getItemStyle={() => defaultMenuItemStyle}
