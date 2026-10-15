@@ -12,10 +12,7 @@ import {
   CarryoverIndicator,
 } from '#components/budget/BalanceWithCarryover';
 import { BalanceMenu } from '#components/budget/envelope/BalanceMenu';
-import {
-  CategoryFundingStatus,
-  useCategoryFunding,
-} from '#components/budget/goals/CategoryFundingStatus';
+import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import {
   Modal,
   ModalCloseButton,
@@ -47,9 +44,6 @@ export function EnvelopeBalanceMenuModal({
   };
 
   const { data: category } = useCategory(categoryId);
-  // The funding panel below replaces the saved goal summary when it can show
-  // live numbers, so the two never appear together.
-  const funding = useCategoryFunding({ category, month });
 
   if (!category) {
     return null;
@@ -80,12 +74,14 @@ export function EnvelopeBalanceMenuModal({
             </Text>
             <BalanceWithCarryover
               isDisabled
-              shouldInlineGoalStatus={!funding}
+              shouldInlineGoalStatus
               carryover={envelopeBudget.catCarryover(categoryId)}
               balance={envelopeBudget.catBalance(categoryId)}
               goal={envelopeBudget.catGoal(categoryId)}
               budgeted={envelopeBudget.catBudgeted(categoryId)}
               longGoal={envelopeBudget.catLongGoal(categoryId)}
+              category={category}
+              month={month}
               CarryoverIndicator={({ style }) => (
                 <CarryoverIndicator
                   style={{

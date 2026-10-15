@@ -65,6 +65,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       await automation('Food', '650');
       const row = rowFor('Food');
       const cell = row.getByTestId('budget').first();
+      const badge = row.locator('[data-funding-state]').first();
       const otherCell = rowFor('Restaurants').getByTestId('budget').first();
       const otherBudget = await otherCell.textContent();
       await budget.setBudgetedAmount('Food', '0');
@@ -76,6 +77,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       );
       await page.keyboard.press('Escape');
       await budget.setBudgetedAmount('Food', '400');
+      await expect(badge).toHaveAttribute('data-funding-state', 'underfunded');
       await openBalance(row);
       await expect(panel()).toContainText('250.00 needed');
       await expect(panel()).toContainText('400.00');
@@ -89,6 +91,7 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
       await assign().focus();
       await page.keyboard.press('Enter');
       await expect(cell).toHaveText('650.00');
+      await expect(badge).toHaveAttribute('data-funding-state', 'funded');
       await expect(panel()).toBeHidden();
       await openBalance(row);
       await expect(panel().getByText('Funded', { exact: true })).toBeVisible();
@@ -128,6 +131,9 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
         .getByTestId(`${budgetType.toLowerCase()}-balance-menu-modal`)
         .getByRole('button', { name: 'Close', exact: true })
         .click();
+      await expect(
+        mobileRow.getByRole('button', { name: /: Funded$/ }),
+      ).toBeVisible();
       await page.setViewportSize({ width: 1280, height: 900 });
       await row.getByTestId('category-name').hover();
       await row
@@ -206,6 +212,9 @@ for (const budgetType of ['Envelope', 'Tracking'] as const) {
           .getByTestId(`${budgetType.toLowerCase()}-balance-menu-modal`)
           .getByRole('button', { name: 'Close', exact: true })
           .click();
+        await expect(
+          mobileRow.getByRole('button', { name: /: Funded$/ }),
+        ).toBeVisible();
         await page.setViewportSize({ width: 1280, height: 900 });
         await expect(cell).toHaveText('1,200.00');
       });

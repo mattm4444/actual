@@ -4,24 +4,36 @@ import type {
   ComponentPropsWithoutRef,
   ComponentType,
   CSSProperties,
+  ReactNode,
 } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { useResponsive } from '@actual-app/components/hooks/useResponsive';
-import { SvgArrowThinRight } from '@actual-app/components/icons/v1';
+import {
+  SvgArrowThinRight,
+  SvgCheckmark,
+  SvgDotsHorizontalTriple,
+  SvgExclamationOutline,
+  SvgSubtract,
+  SvgTime,
+} from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { theme } from '@actual-app/components/theme';
 import { Tooltip } from '@actual-app/components/tooltip';
 import { View } from '@actual-app/components/view';
+import type { CategoryEntity } from '@actual-app/core/types/models';
 import type { TransObjectLiteral } from '@actual-app/core/types/util';
-import { css } from '@emotion/css';
+import { css, cx } from '@emotion/css';
+import type { TFunction } from 'i18next';
 
+import { PrivacyFilter } from '#components/PrivacyFilter';
 import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
 import { useSheetValue } from '#hooks/useSheetValue';
 import type { Binding } from '#spreadsheet';
 
+import { useCategoryFunding } from './goals/CategoryFundingStatus';
 import { makeBalanceAmountStyle } from './util';
 
 type CarryoverIndicatorProps = {
@@ -72,6 +84,8 @@ type ChildrenWithClassName = (
   props: Parameters<CellValueChildren>[0] & {
     className: string;
   },
+  /** Live funding for `category`, so children don't read it a second time. */
+  funding: CategoryFundingState | null,
 ) => ReturnType<CellValueChildren>;
 
 type BalanceWithCarryoverProps = Omit<
@@ -95,6 +109,8 @@ type BalanceWithCarryoverProps = Omit<
   shouldInlineGoalStatus?: boolean;
   CarryoverIndicator?: ComponentType<CarryoverIndicatorProps>;
   tooltipDisabled?: boolean;
+  category?: CategoryEntity;
+  month?: string;
 };
 
 export function BalanceWithCarryover({
@@ -107,6 +123,8 @@ export function BalanceWithCarryover({
   shouldInlineGoalStatus,
   CarryoverIndicator: CarryoverIndicatorComponent = CarryoverIndicator,
   tooltipDisabled,
+  category,
+  month,
   children,
   ...props
 }: BalanceWithCarryoverProps) {
@@ -127,6 +145,7 @@ export function BalanceWithCarryover({
     [budgetedValue, goalValue, isGoalTemplatesEnabled, longGoalValue],
   );
   const format = useFormat();
+  const funding = useCategoryFunding({ category, month });
 
   const getDifferenceToGoal = useCallback(
     (balanceValue: number) =>
@@ -249,7 +268,13 @@ export function BalanceWithCarryover({
           <Tooltip
             content={
               <View style={{ padding: 10 }}>
-                {GoalStatusDisplay(balanceValue, type)}
+                {funding ? (
+                  <PrivacyFilter>
+                    {getFundingBadge(funding, balanceValue, t).label}
+                  </PrivacyFilter>
+                ) : (
+                  GoalStatusDisplay(balanceValue, type)
+                )}
               </View>
             }
             style={{ ...styles.tooltip, borderRadius: '0px 5px 5px 0px' }}
@@ -258,18 +283,34 @@ export function BalanceWithCarryover({
               delay: 750,
               isDisabled:
                 !isGoalTemplatesEnabled ||
-                goalValue == null ||
+                (!funding && goalValue == null) ||
                 isNarrowWidth ||
                 tooltipDisabled,
             }}
           >
             {children ? (
-              children({
-                type,
-                name,
-                value: balanceValue,
-                className: getDefaultClassName(balanceValue),
-              })
+              children(
+                {
+                  type,
+                  name,
+                  value: balanceValue,
+                  className: funding
+                    ? css({
+                        color: getFundingBadge(funding, balanceValue, t).style
+                          .color,
+                      })
+                    : getDefaultClassName(balanceValue),
+                },
+                funding,
+              )
+            ) : funding ? (
+              <FundingBalance
+                funding={funding}
+                value={balanceValue}
+                className={getDefaultClassName(balanceValue)}
+              >
+                <CellValueText type={type} name={name} value={balanceValue} />
+              </FundingBalance>
             ) : (
               <CellValueText
                 type={type}
@@ -286,6 +327,7 @@ export function BalanceWithCarryover({
             />
           )}
           {shouldInlineGoalStatus &&
+            !funding &&
             isGoalTemplatesEnabled &&
             goalValue !== null && (
               <>
@@ -302,5 +344,112 @@ export function BalanceWithCarryover({
         </>
       )}
     </CellValue>
+  );
+}
+
+type CategoryFundingState = NonNullable<ReturnType<typeof useCategoryFunding>>;
+
+const neutral = {
+  backgroundColor: theme.pillBackground,
+  color: theme.pillText,
+};
+
+const FUNDING_BADGES = {
+  overspent: {
+    Icon: SvgExclamationOutline,
+    colors: {
+      backgroundColor: theme.errorBackground,
+      color: theme.errorTextDarker,
+    },
+  },
+  unavailable: { Icon: SvgExclamationOutline, colors: neutral },
+  updating: { Icon: SvgDotsHorizontalTriple, colors: neutral },
+  underfunded: {
+    Icon: SvgTime,
+    colors: {
+      backgroundColor: theme.warningBackground,
+      color: theme.warningTextDark,
+    },
+  },
+  funded: {
+    Icon: SvgCheckmark,
+    colors: {
+      backgroundColor: theme.noticeBackground,
+      color: theme.noticeTextDark,
+    },
+  },
+  'not-needed': { Icon: SvgSubtract, colors: neutral },
+};
+
+function getFundingState(
+  { funding, isError, isFetching }: CategoryFundingState,
+  balance: number,
+): keyof typeof FUNDING_BADGES {
+  if (balance < 0) return 'overspent';
+  if (isError || !funding) return 'unavailable';
+  if (isFetching) return 'updating';
+  if (funding.remaining > 0) return 'underfunded';
+  if (funding.recommended > 0) return 'funded';
+  return 'not-needed';
+}
+
+export function getFundingBadge(
+  fundingState: CategoryFundingState,
+  balance: number,
+  t: TFunction,
+) {
+  const state = getFundingState(fundingState, balance);
+  const labels = {
+    overspent: t('Overspent'),
+    unavailable: t('Automation unavailable'),
+    updating: t('Updating…'),
+    underfunded: t('Underfunded'),
+    funded: t('Funded'),
+    'not-needed': t('No funding needed'),
+  };
+  const { Icon, colors } = FUNDING_BADGES[state];
+  const style = {
+    ...colors,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 12,
+    padding: '2px 7px',
+    maxWidth: '100%',
+    lineHeight: '18px',
+  } satisfies CSSProperties;
+  return { state, label: labels[state], Icon, style };
+}
+
+type FundingBalanceProps = {
+  funding: CategoryFundingState;
+  value: number;
+  className: string;
+  children: ReactNode;
+};
+
+function FundingBalance({
+  funding,
+  value,
+  className,
+  children,
+}: FundingBalanceProps) {
+  const { t } = useTranslation();
+  const { state, label, Icon, style } = getFundingBadge(funding, value, t);
+  return (
+    <span
+      className={cx(className, css(style))}
+      data-funding-state={state}
+      aria-busy={funding.isFetching}
+    >
+      <Icon
+        aria-hidden="true"
+        width={12}
+        height={12}
+        style={{ flexShrink: 0 }}
+      />
+      <span className={css(styles.visuallyHidden)}>{label}: </span>
+      {children}
+    </span>
   );
 }
