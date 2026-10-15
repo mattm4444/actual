@@ -30,30 +30,6 @@ import {
 import { runSchedule } from './schedule-template';
 import { getActiveSchedules } from './statements';
 
-export type TemplatePreferences = {
-  currencyCode: string;
-  hideFraction: boolean;
-  isTracking: boolean;
-};
-
-export async function getTemplatePreferences(): Promise<TemplatePreferences> {
-  const hideDecimal = await aqlQuery(
-    q('preferences').filter({ id: 'hideFraction' }).select('*'),
-  );
-  const currencyPref = await aqlQuery(
-    q('preferences').filter({ id: 'defaultCurrencyCode' }).select('*'),
-  );
-  return {
-    isTracking: isTrackingBudget(),
-    currencyCode:
-      currencyPref.data.length > 0 ? currencyPref.data[0].value : '',
-    hideFraction:
-      hideDecimal.data.length > 0
-        ? hideDecimal.data[0].value === 'true'
-        : false,
-  };
-}
-
 export class CategoryTemplateContext {
   /*----------------------------------------------------------------------------
    * Using This Class:
@@ -80,7 +56,6 @@ export class CategoryTemplateContext {
     month: string,
     budgeted: number,
     skipAvailableClamp: boolean = false,
-    preferences?: TemplatePreferences,
   ) {
     // get all the needed setup values
     const lastMonthSheet = monthUtils.sheetForMonth(
@@ -98,7 +73,7 @@ export class CategoryTemplateContext {
     if (
       (fromLastMonth < 0 && !carryover) || // overspend no carryover
       category.is_income || // tracking budget income categories
-      ((preferences?.isTracking ?? isTrackingBudget()) && !carryover) // tracking budget regular categories
+      (isTrackingBudget() && !carryover) // tracking budget regular categories
     ) {
       fromLastMonth = 0;
     }
@@ -108,8 +83,15 @@ export class CategoryTemplateContext {
     await CategoryTemplateContext.checkByAndScheduleAndSpend(templates, month);
     await CategoryTemplateContext.checkPercentage(templates);
 
-    const { currencyCode, hideFraction } =
-      preferences ?? (await getTemplatePreferences());
+    const hideDecimal = await aqlQuery(
+      q('preferences').filter({ id: 'hideFraction' }).select('*'),
+    );
+
+    const currencyPref = await aqlQuery(
+      q('preferences').filter({ id: 'defaultCurrencyCode' }).select('*'),
+    );
+    const currencyCode =
+      currencyPref.data.length > 0 ? currencyPref.data[0].value : '';
 
     // call the private constructor
     return new CategoryTemplateContext(
@@ -119,7 +101,9 @@ export class CategoryTemplateContext {
       fromLastMonth,
       budgeted,
       currencyCode,
-      hideFraction,
+      hideDecimal.data.length > 0
+        ? hideDecimal.data[0].value === 'true'
+        : false,
       skipAvailableClamp,
     );
   }
@@ -763,10 +747,14 @@ export class CategoryTemplateContext {
         throw new Error(`Unrecognized periodic period: ${String(period)}`);
     }
 
+    // Both loops below only end once the date moves past a bound, so stop
+    // instead of hanging if a shift ever fails to advance the date.
     function advanceDate(current: string): string {
       const next = dateShiftFunction(current, numPeriods);
       if (!monthUtils.isAfter(next, current)) {
-        throw new Error('Periodic template interval must advance the date');
+        throw new Error(
+          'Infinite loop detected in repeating template, check the repeat interval',
+        );
       }
       return next;
     }

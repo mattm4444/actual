@@ -11,7 +11,10 @@ import type { CategoryEntity } from '@actual-app/core/types/models';
 import { css, cx } from '@emotion/css';
 import { AutoTextSize } from 'auto-text-size';
 
-import { BalanceWithCarryover } from '#components/budget/BalanceWithCarryover';
+import {
+  BalanceWithCarryover,
+  getFundingBadge,
+} from '#components/budget/BalanceWithCarryover';
 import { PrivacyFilter } from '#components/PrivacyFilter';
 import { useFormat } from '#hooks/useFormat';
 import { useSyncedPref } from '#hooks/useSyncedPref';
@@ -26,6 +29,7 @@ type BalanceCellProps = {
     'leftover' | 'sum-amount'
   >;
   category: CategoryEntity;
+  month: string;
   show3Columns?: boolean;
   onPress?: () => void;
   'aria-label'?: string;
@@ -34,6 +38,7 @@ type BalanceCellProps = {
 export function BalanceCell({
   binding,
   category,
+  month,
   show3Columns,
   onPress,
   'aria-label': ariaLabel,
@@ -78,80 +83,81 @@ export function BalanceCell({
       budgeted={budgeted}
       longGoal={longGoal}
       CarryoverIndicator={MobileCarryoverIndicator}
+      category={category}
+      month={month}
     >
-      {({
-        type,
-        value,
-        className: defaultClassName,
-        statusIcon,
-        statusLabel,
-        badgeStyle,
-      }) => (
-        <Button
-          variant="bare"
-          style={{
-            ...PILL_STYLE,
-            maxWidth: columnWidth,
-            ...(badgeStyle && {
-              backgroundColor: 'transparent',
-              padding: 0,
-              minHeight: 40,
-            }),
-          }}
-          onPress={onPress}
-          aria-label={
-            statusLabel ? `${ariaLabel ?? ''}: ${statusLabel}` : ariaLabel
-          }
-        >
-          <span
-            style={{
-              ...badgeStyle,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              minWidth: 0,
-              maxWidth: columnWidth,
-            }}
-          >
-            {statusIcon}
-            {/* AutoTextSize changes its parent's alignment; isolate it from the icon. */}
-            <span
-              style={{
-                minWidth: 0,
-                maxWidth: badgeStyle
-                  ? `calc(${columnWidth} - 30px)`
-                  : columnWidth,
-              }}
+      {({ type, value, className: defaultClassName }, funding) => {
+        const badge = funding && getFundingBadge(funding, value, t);
+        const amount = (
+          <PrivacyFilter>
+            <AutoTextSize
+              key={value}
+              as={Text}
+              minFontSizePx={6}
+              maxFontSizePx={12}
+              mode="oneline"
+              className={cx(
+                defaultClassName,
+                css({
+                  ...styles.tnum,
+                  maxWidth: badge ? `calc(${columnWidth} - 30px)` : columnWidth,
+                  textAlign: 'right',
+                  fontSize: 12,
+                }),
+              )}
             >
-              <PrivacyFilter>
-                <AutoTextSize
-                  key={value}
-                  as={Text}
-                  minFontSizePx={6}
-                  maxFontSizePx={12}
-                  mode="oneline"
-                  className={cx(
-                    defaultClassName,
-                    css({
-                      ...styles.tnum,
-                      maxWidth: badgeStyle
-                        ? `calc(${columnWidth} - 30px)`
-                        : columnWidth,
-                      textAlign: 'right',
-                      lineHeight: '18px',
-                      display: 'block',
-                      fontSize: 12,
-                    }),
-                  )}
+              {format(value, type)}
+            </AutoTextSize>
+          </PrivacyFilter>
+        );
+        return (
+          <Button
+            variant="bare"
+            style={{
+              ...PILL_STYLE,
+              maxWidth: columnWidth,
+              ...(badge && {
+                backgroundColor: 'transparent',
+                padding: 0,
+                minHeight: 40,
+              }),
+            }}
+            onPress={onPress}
+            aria-label={
+              badge ? `${ariaLabel ?? ''}: ${badge.label}` : ariaLabel
+            }
+          >
+            {badge ? (
+              <span
+                style={{
+                  ...badge.style,
+                  justifyContent: 'center',
+                  minWidth: 0,
+                  maxWidth: columnWidth,
+                }}
+              >
+                <badge.Icon
+                  aria-hidden="true"
+                  width={12}
+                  height={12}
+                  style={{ flexShrink: 0 }}
+                />
+                {/* AutoTextSize changes its parent's alignment; isolate it from the icon. */}
+                <span
+                  style={{
+                    minWidth: 0,
+                    maxWidth: `calc(${columnWidth} - 30px)`,
+                  }}
                 >
-                  {format(value, type)}
-                </AutoTextSize>
-              </PrivacyFilter>
-            </span>
-          </span>
-        </Button>
-      )}
+                  {amount}
+                </span>
+              </span>
+            ) : (
+              amount
+            )}
+          </Button>
+        );
+      }}
     </BalanceWithCarryover>
   );
 }

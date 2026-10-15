@@ -1,28 +1,38 @@
+import { View } from '@actual-app/components/view';
 import { initServer } from '@actual-app/core/platform/client/connection';
 import type { CategoryFunding } from '@actual-app/core/server/budget/goal-template';
-import type { CategoryEntity } from '@actual-app/core/types/models';
+import type { CategoryEntity, NoteEntity } from '@actual-app/core/types/models';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Mock } from 'vitest';
 
 import { fundingQueries } from '#budget/queries';
+import { BalanceWithCarryover } from '#components/budget/BalanceWithCarryover';
+import { SheetNameProvider } from '#hooks/useSheetName';
 import {
   configureTestAppStore,
   createTestQueryClient,
   TestProviders,
 } from '#mocks';
 import { mergeSyncedPrefs } from '#prefs/prefsSlice';
+import { envelopeBudget } from '#spreadsheet/bindings';
 
-import { CategoryFundingProvider } from './CategoryFundingContext';
 import { CategoryFundingStatus } from './CategoryFundingStatus';
 
 vi.mock(
   '@actual-app/core/platform/client/connection',
   () => import('#mocks/connection'),
 );
-
 vi.mock('@actual-app/components/hooks/useResponsive', () => ({
   useResponsive: () => ({ isNarrowWidth: true }),
+}));
+vi.mock('#hooks/useSheetValue', () => ({
+  useSheetValue: (binding: string | { name: string }) => {
+    const name = typeof binding === 'string' ? binding : binding.name;
+    if (name.startsWith('leftover-')) return balance;
+    if (name.startsWith('budget-')) return funding?.budgeted ?? 0;
+    // No saved goal: the funding status must work before Apply.
+    return null;
+  },
 }));
 
 const category: CategoryEntity = {
@@ -34,319 +44,221 @@ const category: CategoryEntity = {
     '[{"type":"simple","monthly":650,"directive":"template","priority":0}]',
   template_settings: { source: 'ui' },
 };
+const underfunded = { budgeted: 40000, recommended: 65000, remaining: 25000 };
+const funded = { budgeted: 65000, recommended: 65000, remaining: 0 };
+const assignName =
+  'Assign money to underfunded goal: Groceries for January 2024';
+
+let balance: number;
 let funding: CategoryFunding | null;
+let notes: NoteEntity[];
 let client: ReturnType<typeof createTestQueryClient>;
 let store: ReturnType<typeof configureTestAppStore>;
-let fund: Mock<
-  (args: { month: string; categoryId: string }) => Promise<boolean>
->;
-let read: Mock<() => Promise<CategoryFunding | null>>;
+const read = vi.fn<() => Promise<CategoryFunding | null>>();
+const fund = vi.fn<() => Promise<boolean>>();
 
-beforeEach(() => {
-  funding = {
-    budgeted: 0,
-    recommended: 65000,
-    remaining: 65000,
-    amountToFund: 65000,
-  };
-  client = createTestQueryClient();
-  store = configureTestAppStore({ queryClient: client });
-  store.dispatch(mergeSyncedPrefs({ 'flags.goalTemplatesEnabled': 'true' }));
-  fund = vi.fn(async () => {
-    funding = {
-      budgeted: 65000,
-      recommended: 65000,
-      remaining: 0,
-      amountToFund: 0,
-    };
-    return true;
-  });
-  read = vi.fn(async () => funding);
-  initServer({
-    'budget/monthly-category-funding': async () => ({
-      [category.id]: { funding: await read() },
-    }),
-    'budget/fund-category': fund,
-    query: async () => ({ data: [], dependencies: [] }),
-  });
-});
-
-function renderStatus(cat = category, onFunded?: () => void) {
-  return render(
+function renderFunding({
+  cat = category,
+  onFunded = vi.fn(),
+  onKeyDown = vi.fn(),
+} = {}) {
+  render(
     <TestProviders queryClient={client} store={store}>
-      <CategoryFundingProvider category={cat} month="2024-01">
-        <CategoryFundingStatus onFunded={onFunded} />
-      </CategoryFundingProvider>
+      <SheetNameProvider name="budget202401">
+        <BalanceWithCarryover
+          category={cat}
+          month="2024-01"
+          carryover={envelopeBudget.catCarryover(cat.id)}
+          balance={envelopeBudget.catBalance(cat.id)}
+          goal={envelopeBudget.catGoal(cat.id)}
+          budgeted={envelopeBudget.catBudgeted(cat.id)}
+          longGoal={envelopeBudget.catLongGoal(cat.id)}
+        />
+        <View onKeyDown={onKeyDown}>
+          <CategoryFundingStatus
+            category={cat}
+            month="2024-01"
+            onFunded={onFunded}
+          />
+        </View>
+      </SheetNameProvider>
     </TestProviders>,
   );
 }
 
-it.each([
-  [0, '650.00'],
-  [40000, '250.00'],
-])(
-  'shows the engine-derived amount remaining with %i budgeted',
-  async (budgeted, amount) => {
-    funding = {
-      budgeted,
-      recommended: 65000,
-      remaining: 65000 - budgeted,
-      amountToFund: 65000 - budgeted,
-    };
-    renderStatus();
-    expect(await screen.findByText(amount + ' needed')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', {
-        name: 'Assign money to underfunded goal: Groceries for January 2024',
-      }),
-    ).toBeEnabled();
-  },
-);
+function pill() {
+  return document.querySelector('[data-funding-state]');
+}
 
-it.each([65000, 90000])(
-  'shows completed with %i budgeted and no Fund action',
-  async budgeted => {
-    funding = { budgeted, recommended: 65000, remaining: 0, amountToFund: 0 };
-    renderStatus();
-    expect(await screen.findByText('Funded')).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(fund).not.toHaveBeenCalled();
-  },
-);
-
-it('is keyboard reachable, has a category and month label, and refreshes after funding', async () => {
-  const user = userEvent.setup();
-  funding = {
-    budgeted: 40000,
-    recommended: 65000,
-    remaining: 25000,
-    amountToFund: 25000,
-  };
-  renderStatus();
-  const button = await screen.findByRole('button', {
-    name: 'Assign money to underfunded goal: Groceries for January 2024',
+function deferNextRead() {
+  let finish: (value: CategoryFunding | null) => void;
+  read.mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+  act(() => {
+    void client.invalidateQueries({ queryKey: fundingQueries.all() });
   });
-  await user.tab();
-  expect(button).toHaveFocus();
-  await user.keyboard('{Enter}');
-  await waitFor(() =>
+  return (value: CategoryFunding | null) => act(async () => finish(value));
+}
+
+beforeEach(() => {
+  balance = 30620;
+  funding = { budgeted: 0, recommended: 65000, remaining: 65000 };
+  notes = [];
+  client = createTestQueryClient();
+  store = configureTestAppStore({ queryClient: client });
+  store.dispatch(mergeSyncedPrefs({ 'flags.goalTemplatesEnabled': 'true' }));
+  read.mockReset().mockImplementation(async () => funding);
+  fund.mockReset().mockImplementation(async () => {
+    funding = funded;
+    return true;
+  });
+  initServer({
+    'budget/category-funding': read,
+    'budget/fund-category': fund,
+    query: async () => ({ data: notes, dependencies: [] }),
+  });
+});
+
+describe('CategoryFundingStatus', () => {
+  it.each([
+    [
+      'underfunded',
+      { budgeted: 0, recommended: 65000, remaining: 65000 },
+      30620,
+      '650.00 needed',
+    ],
+    ['underfunded', underfunded, 30620, '250.00 needed'],
+    ['funded', funded, 30620, 'Funded'],
+    ['funded', { ...funded, budgeted: 90000 }, 30620, 'Funded'],
+    [
+      'not-needed',
+      { budgeted: 0, recommended: 0, remaining: 0 },
+      0,
+      'No funding needed',
+    ],
+    ['overspent', funded, -26317, 'Funded'],
+    ['overspent', underfunded, -26317, '250.00 needed'],
+  ])(
+    'shows the %s state from the engine result',
+    async (state, value, amount, text) => {
+      funding = value;
+      balance = amount;
+      renderFunding();
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(pill()).toHaveAttribute('data-funding-state', state);
+      expect(
+        screen.queryAllByRole('button', { name: assignName }),
+      ).toHaveLength(value.remaining > 0 ? 1 : 0);
+      expect(read).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('shows an unavailable state instead of a funded check when the engine fails', async () => {
+    read.mockRejectedValue(new Error('Invalid automation'));
+    renderFunding();
+    expect(
+      await screen.findByText('Automation unavailable'),
+    ).toBeInTheDocument();
+    expect(pill()).toHaveAttribute('data-funding-state', 'unavailable');
+    expect(screen.queryByText('Funded')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['the feature is off', 'false', category],
+    [
+      'the category has no automation',
+      'true',
+      { ...category, goal_def: undefined },
+    ],
+  ])('does not query or show funding when %s', async (_, flag, cat) => {
+    store.dispatch(mergeSyncedPrefs({ 'flags.goalTemplatesEnabled': flag }));
+    renderFunding({ cat });
+    await act(() => Promise.resolve());
+    expect(read).not.toHaveBeenCalled();
+    expect(pill()).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('category-funding-status'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows funding for a category with note templates', async () => {
+    notes = [{ id: 'groceries', note: '#template 650' }];
+    renderFunding({ cat: { ...category, goal_def: undefined } });
+    expect(await screen.findByText('650.00 needed')).toBeInTheDocument();
+    expect(read).toHaveBeenCalledOnce();
+  });
+
+  it('funds from the keyboard, refreshes, and offers Undo', async () => {
+    const user = userEvent.setup();
+    const onFunded = vi.fn();
+    const onKeyDown = vi.fn();
+    renderFunding({ onFunded, onKeyDown });
+    const button = await screen.findByRole('button', { name: assignName });
+    expect(pill()).toHaveTextContent('Underfunded:');
+    await user.tab();
+    expect(button).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('Funded')).toBeInTheDocument();
+    expect(pill()).toHaveAttribute('data-funding-state', 'funded');
     expect(fund).toHaveBeenCalledExactlyOnceWith({
       month: '2024-01',
       categoryId: 'groceries',
-    }),
-  );
-  expect(await screen.findByText('Funded')).toBeInTheDocument();
-});
-
-it('refreshes the amount when its funding query is invalidated after a budget change', async () => {
-  renderStatus();
-  await screen.findByText('650.00 needed');
-  funding = {
-    budgeted: 40000,
-    recommended: 65000,
-    remaining: 25000,
-    amountToFund: 25000,
-  };
-  await act(() => client.invalidateQueries({ queryKey: fundingQueries.all() }));
-  expect(await screen.findByText('250.00 needed')).toBeInTheDocument();
-});
-
-it('does not add funding UI or calculate a recommendation for a category without automation', async () => {
-  const { container } = renderStatus({ ...category, goal_def: undefined });
-  await act(() => Promise.resolve());
-  expect(container).toBeEmptyDOMElement();
-  expect(read).not.toHaveBeenCalled();
-});
-
-it('allows an explicit Fund action for the full recommendation with no available funds', async () => {
-  funding = {
-    budgeted: 40000,
-    recommended: 65000,
-    remaining: 25000,
-    amountToFund: 25000,
-  };
-  renderStatus();
-  expect(await screen.findByText('250.00 needed')).toBeInTheDocument();
-  expect(
-    screen.getByRole('button', {
-      name: /Assign money to underfunded goal: Groceries/,
-    }),
-  ).toBeEnabled();
-});
-
-it('shows an unavailable state when the engine cannot calculate, never a funded check', async () => {
-  read.mockRejectedValue(new Error('Invalid automation'));
-  renderStatus();
-  expect(await screen.findByText('Automation unavailable')).toBeInTheDocument();
-  expect(screen.queryByText('Funded')).not.toBeInTheDocument();
-  expect(screen.queryByRole('button')).not.toBeInTheDocument();
-});
-
-it('preserves underfunding and normal error notification if the mutation fails', async () => {
-  fund.mockRejectedValue(new Error('Could not save'));
-  const user = userEvent.setup();
-  renderStatus();
-  await user.click(
-    await screen.findByRole('button', {
-      name: /Assign money to underfunded goal: Groceries/,
-    }),
-  );
-  await waitFor(() =>
-    expect(store.getState().notifications.notifications).toHaveLength(1),
-  );
-  expect(screen.getByText('650.00 needed')).toBeInTheDocument();
-  expect(screen.queryByText('Funded')).not.toBeInTheDocument();
-});
-
-it('keeps Fund keyboard activation out of the budget cell navigation handler', async () => {
-  const user = userEvent.setup();
-  const navigateCell = vi.fn(event => event.preventDefault());
-  render(
-    <TestProviders queryClient={client} store={store}>
-      <div onKeyDown={navigateCell}>
-        <CategoryFundingProvider category={category} month="2024-01">
-          <CategoryFundingStatus />
-        </CategoryFundingProvider>
-      </div>
-    </TestProviders>,
-  );
-  const button = await screen.findByRole('button', {
-    name: /Assign money to underfunded goal: Groceries/,
+    });
+    expect(onKeyDown).not.toHaveBeenCalled();
+    expect(onFunded).toHaveBeenCalledOnce();
+    expect(store.getState().notifications.notifications).toMatchObject([
+      { button: { title: 'Undo' } },
+    ]);
   });
-  act(() => button.focus());
-  await user.keyboard('{Enter}');
-  expect(await screen.findByText('Funded')).toBeInTheDocument();
-  expect(navigateCell).not.toHaveBeenCalled();
-  expect(fund).toHaveBeenCalledOnce();
-});
 
-it('preserves keyboard focus while an edit triggers a background refresh', async () => {
-  renderStatus();
-  const button = await screen.findByRole('button', {
-    name: /Assign money to underfunded goal: Groceries/,
-  });
-  act(() => button.focus());
-  let finishRead: ((value: CategoryFunding | null) => void) | undefined;
-  read.mockImplementationOnce(
-    () =>
-      new Promise(resolve => {
-        finishRead = resolve;
-      }),
-  );
-  let refreshing: Promise<void>;
-  act(() => {
-    refreshing = client.invalidateQueries({ queryKey: fundingQueries.all() });
-  });
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
-  expect(button).toBeEnabled();
-  expect(button).toHaveFocus();
-  await act(async () => {
-    finishRead?.(funding);
-    await refreshing;
-  });
-  expect(button).toHaveFocus();
-});
-
-it('shows no funding needed for a zero engine recommendation instead of claiming completion', async () => {
-  funding = { budgeted: 0, recommended: 0, remaining: 0, amountToFund: 0 };
-  renderStatus();
-  expect(await screen.findByText('No funding needed')).toBeInTheDocument();
-  expect(screen.queryByText('Funded')).not.toBeInTheDocument();
-  expect(screen.queryByRole('button')).not.toBeInTheDocument();
-});
-
-it('removes the status when an automation is removed', async () => {
-  renderStatus();
-  await screen.findByText('650.00 needed');
-  funding = null;
-  await act(() => client.invalidateQueries({ queryKey: fundingQueries.all() }));
-  await waitFor(() =>
-    expect(
-      screen.queryByTestId('category-funding-status'),
-    ).not.toBeInTheDocument(),
-  );
-});
-
-it('marks a completed status busy while recalculating instead of displaying a stale check', async () => {
-  funding = {
-    budgeted: 65000,
-    recommended: 65000,
-    remaining: 0,
-    amountToFund: 0,
-  };
-  renderStatus();
-  await screen.findByText('Funded');
-  let finishRead: ((value: CategoryFunding | null) => void) | undefined;
-  read.mockImplementationOnce(
-    () =>
-      new Promise(resolve => {
-        finishRead = resolve;
-      }),
-  );
-  let refreshing: Promise<void>;
-  act(() => {
-    refreshing = client.invalidateQueries({ queryKey: fundingQueries.all() });
-  });
-  expect(await screen.findByText('Updating…')).toBeInTheDocument();
-  expect(screen.getByTestId('category-funding-status')).toHaveAttribute(
-    'aria-busy',
-    'true',
-  );
-  expect(screen.queryByText('Funded')).not.toBeInTheDocument();
-  await act(async () => {
-    finishRead?.(funding);
-    await refreshing;
-  });
-  expect(await screen.findByText('Funded')).toBeInTheDocument();
-});
-
-it('does not offer Undo when a stale Fund request makes no change', async () => {
-  fund.mockResolvedValue(false);
-  const user = userEvent.setup();
-  renderStatus();
-  await user.click(
-    await screen.findByRole('button', {
-      name: /Assign money to underfunded goal: Groceries/,
-    }),
-  );
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
-  expect(store.getState().notifications.notifications).toHaveLength(0);
-  expect(screen.getByText('650.00 needed')).toBeInTheDocument();
-});
-
-it('offers mobile Undo only after funding actually changed the budget', async () => {
-  const user = userEvent.setup();
-  renderStatus();
-  await user.click(
-    await screen.findByRole('button', {
-      name: /Assign money to underfunded goal: Groceries/,
-    }),
-  );
-  await waitFor(() =>
-    expect(store.getState().notifications.notifications).toHaveLength(1),
-  );
-  expect(store.getState().notifications.notifications[0].button?.title).toBe(
-    'Undo',
-  );
-});
-
-it.each([true, false])(
-  'closes the desktop menu only after a successful funding change (%s)',
-  async changed => {
+  it('does not offer Undo or close the menu when funding makes no change', async () => {
+    fund.mockResolvedValue(false);
     const onFunded = vi.fn();
-    fund.mockResolvedValue(changed);
-    renderStatus(category, onFunded);
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByRole('button', {
-        name: /Assign money to underfunded goal:/,
-      }),
+    renderFunding({ onFunded });
+    await userEvent.click(
+      await screen.findByRole('button', { name: assignName }),
     );
     await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
-    if (changed) {
-      await waitFor(() => expect(onFunded).toHaveBeenCalledOnce());
-    } else {
-      expect(onFunded).not.toHaveBeenCalled();
-    }
-  },
-);
+    expect(store.getState().notifications.notifications).toHaveLength(0);
+    expect(screen.getByText('650.00 needed')).toBeInTheDocument();
+    expect(onFunded).not.toHaveBeenCalled();
+  });
+
+  it('keeps the row underfunded and shows the normal error when funding fails', async () => {
+    fund.mockRejectedValue(new Error('Could not save'));
+    renderFunding();
+    await userEvent.click(
+      await screen.findByRole('button', { name: assignName }),
+    );
+    await waitFor(() =>
+      expect(store.getState().notifications.notifications).toHaveLength(1),
+    );
+    expect(screen.getByText('650.00 needed')).toBeInTheDocument();
+  });
+
+  it('keeps focus while refreshing, shows Updating…, and removes the status with the automation', async () => {
+    renderFunding();
+    const button = await screen.findByRole('button', { name: assignName });
+    act(() => button.focus());
+    let finish = deferNextRead();
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(button).toHaveFocus();
+    expect(button).toBeEnabled();
+    await finish(funded);
+    expect(await screen.findByText('Funded')).toBeInTheDocument();
+    finish = deferNextRead();
+    expect(await screen.findByText('Updating…')).toBeInTheDocument();
+    expect(screen.getByTestId('category-funding-status')).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    expect(pill()).toHaveAttribute('data-funding-state', 'updating');
+    await finish(null);
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId('category-funding-status'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(pill()).not.toBeInTheDocument();
+  });
+});

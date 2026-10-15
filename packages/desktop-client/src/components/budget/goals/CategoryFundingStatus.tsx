@@ -1,3 +1,4 @@
+import { ProgressBar } from 'react-aria-components';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
@@ -9,46 +10,48 @@ import { theme } from '@actual-app/components/theme';
 import { Tooltip } from '@actual-app/components/tooltip';
 import { View } from '@actual-app/components/view';
 import * as monthUtils from '@actual-app/core/shared/months';
-import { useQueryClient } from '@tanstack/react-query';
+import type { CategoryEntity } from '@actual-app/core/types/models';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useBudgetActions } from '#budget/mutations';
-import { invalidateFundingQueries } from '#budget/queries';
+import { fundingQueries } from '#budget/queries';
 import { FinancialText } from '#components/FinancialText';
 import { PrivacyFilter } from '#components/PrivacyFilter';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
+import { useLocale } from '#hooks/useLocale';
+import { useNotes } from '#hooks/useNotes';
 import { useUndo } from '#hooks/useUndo';
 
-import { useCategoryFunding } from './CategoryFundingContext';
+type CategoryFundingStatusProps = {
+  category: CategoryEntity;
+  month: string;
+  onFunded?: () => void;
+};
 
-type CategoryFundingStatusProps = { onFunded?: () => void };
-
-export function CategoryFundingStatus(props: CategoryFundingStatusProps) {
-  const state = useCategoryFunding();
-  if (!state) return null;
-  return <EnabledCategoryFundingStatus {...props} />;
-}
-
-function EnabledCategoryFundingStatus({
+export function CategoryFundingStatus({
+  category,
+  month,
   onFunded,
 }: CategoryFundingStatusProps) {
   const { t } = useTranslation();
   const format = useFormat();
+  const locale = useLocale();
   const { isNarrowWidth } = useResponsive();
-  const state = useCategoryFunding();
   const queryClient = useQueryClient();
   const { mutateAsync, isPending } = useBudgetActions();
   const { showUndoNotification } = useUndo();
+  const state = useCategoryFunding({ category, month });
   if (!state) return null;
-  const { category, month, funding, isError, isFetching } = state;
-  if (!funding && !isError) return null;
+  const { funding, isError, isFetching } = state;
 
   const remaining = funding?.remaining ?? 0;
-  const canFund = (funding?.amountToFund ?? 0) > 0;
   const amount = format(remaining, 'financial');
-  const monthLabel = monthUtils.format(month, 'MMMM yyyy');
-  const explanation = t(
-    'Add the full amount needed to this category. This can increase the overbudgeted amount.',
-  );
+  const monthLabel = monthUtils.format(month, 'MMMM yyyy', locale);
+  const progress =
+    funding && funding.recommended > 0
+      ? Math.max(0, Math.min(1, 1 - funding.remaining / funding.recommended))
+      : 0;
 
   async function fund() {
     try {
@@ -57,7 +60,7 @@ function EnabledCategoryFundingStatus({
         type: 'fund-category',
         args: { category: category.id },
       });
-      await invalidateFundingQueries(queryClient);
+      await queryClient.invalidateQueries({ queryKey: fundingQueries.all() });
       if (result && 'funded' in result && result.funded) {
         showUndoNotification({ message: t('Budget automation applied.') });
         onFunded?.();
@@ -85,7 +88,6 @@ function EnabledCategoryFundingStatus({
         padding: 16,
         fontSize: 13,
         textAlign: 'left',
-        boxSizing: 'border-box',
         color: isError
           ? theme.pageTextLight
           : remaining > 0
@@ -103,81 +105,52 @@ function EnabledCategoryFundingStatus({
       {!isError && funding && (
         <>
           {funding.recommended > 0 && (
-            <View
-              role="progressbar"
+            <ProgressBar
+              value={Math.round(progress * 100)}
               aria-label={t('Goal funding progress')}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(
-                Math.max(
-                  0,
-                  Math.min(1, 1 - funding.remaining / funding.recommended),
-                ) * 100,
-              )}
-              style={{
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: theme.pillBackground,
-                overflow: 'hidden',
-              }}
             >
               <View
                 style={{
-                  height: '100%',
-                  width: `${Math.max(0, Math.min(1, 1 - funding.remaining / funding.recommended)) * 100}%`,
-                  backgroundColor:
-                    remaining > 0 ? theme.warningText : theme.noticeText,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: theme.pillBackground,
+                  overflow: 'hidden',
                 }}
-              />
-            </View>
+              >
+                <View
+                  style={{
+                    height: '100%',
+                    width: `${progress * 100}%`,
+                    backgroundColor:
+                      remaining > 0 ? theme.warningText : theme.noticeText,
+                  }}
+                />
+              </View>
+            </ProgressBar>
           )}
           <View style={{ gap: 8, color: theme.pageText }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                gap: 16,
-              }}
-            >
-              <Text>
-                <Trans>Recommended this month</Trans>
-              </Text>
-              <PrivacyFilter>
-                <FinancialText>
-                  {format(funding.recommended, 'financial')}
-                </FinancialText>
-              </PrivacyFilter>
-            </View>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                gap: 16,
-              }}
-            >
-              <Text>
-                <Trans>Assigned so far</Trans>
-              </Text>
-              <PrivacyFilter>
-                <FinancialText>
-                  {format(funding.budgeted, 'financial')}
-                </FinancialText>
-              </PrivacyFilter>
-            </View>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                gap: 16,
-              }}
-            >
-              <Text>
-                <Trans>Still needed</Trans>
-              </Text>
-              <PrivacyFilter>
-                <FinancialText>{amount}</FinancialText>
-              </PrivacyFilter>
-            </View>
+            {[
+              {
+                label: t('Recommended this month'),
+                value: funding.recommended,
+              },
+              { label: t('Assigned so far'), value: funding.budgeted },
+              { label: t('Still needed'), value: remaining },
+            ].map(({ label, value }) => (
+              <View
+                key={label}
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                }}
+              >
+                <Text>{label}</Text>
+                <PrivacyFilter>
+                  <FinancialText>{format(value, 'financial')}</FinancialText>
+                </PrivacyFilter>
+              </View>
+            ))}
           </View>
         </>
       )}
@@ -196,7 +169,11 @@ function EnabledCategoryFundingStatus({
               <Trans>{{ amount }} needed</Trans>
             </Text>
           </PrivacyFilter>
-          <Tooltip content={explanation}>
+          <Tooltip
+            content={t(
+              'Add the full amount needed to this category. This can increase the overbudgeted amount.',
+            )}
+          >
             <Button
               variant="primary"
               aria-label={t(
@@ -206,7 +183,7 @@ function EnabledCategoryFundingStatus({
                   month: monthLabel,
                 },
               )}
-              isDisabled={!canFund || isPending}
+              isDisabled={isPending}
               onPress={() => {
                 void fund();
               }}
@@ -239,4 +216,28 @@ function EnabledCategoryFundingStatus({
       )}
     </View>
   );
+}
+
+export function useCategoryFunding({
+  category,
+  month,
+}: {
+  category?: CategoryEntity;
+  month?: string;
+}) {
+  const isEnabled = useFeatureFlag('goalTemplatesEnabled');
+  const notes = useNotes(isEnabled && category ? category.id : '');
+  const hasTemplates =
+    isEnabled &&
+    !!category &&
+    !!month &&
+    (!!category.goal_def || !!notes?.includes('#template'));
+  const { data, isError, isFetching } = useQuery({
+    ...fundingQueries.category(month ?? '', category?.id ?? ''),
+    enabled: hasTemplates,
+    retry: false,
+  });
+  return hasTemplates && (data || isError)
+    ? { funding: data, isError, isFetching }
+    : null;
 }

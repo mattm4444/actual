@@ -7,7 +7,6 @@ import { t } from 'i18next';
 import { accountQueries } from './accounts';
 import { setAppState } from './app/appSlice';
 import { categoryQueries } from './budget';
-import { invalidateFundingQueries } from './budget/queries';
 import { closeBudgetUI } from './budgetfiles/budgetfilesSlice';
 import { closeModal, pushModal, replaceModal } from './modals/modalsSlice';
 import type { Modal } from './modals/modalsSlice';
@@ -53,7 +52,6 @@ export function handleGlobalEvents(store: AppStore, queryClient: QueryClient) {
 
   const unlistenUndo = listen('undo-event', undoState => {
     const { tables, undoTag } = undoState;
-    void invalidateFundingQueries(queryClient);
     const promises: Promise<unknown>[] = [];
 
     if (

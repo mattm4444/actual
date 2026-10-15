@@ -12,7 +12,7 @@ import { View } from '@actual-app/components/view';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type { CategoryEntity } from '@actual-app/core/types/models';
 
-import { CategoryFundingProvider } from '#components/budget/goals/CategoryFundingContext';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useNavigate } from '#hooks/useNavigate';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { collapseModals, pushModal } from '#modals/modalsSlice';
@@ -69,7 +69,7 @@ function IncomeCategoryName({ category, onEdit }: IncomeCategoryNameProps) {
         >
           <Text
             style={{
-              ...styles.lineClamp(1),
+              ...styles.lineClamp(2),
               width: sidebarColumnWidth,
               textAlign: 'left',
               ...styles.smallText,
@@ -105,6 +105,7 @@ function IncomeCategoryCells({
   const { t } = useTranslation();
   const columnWidth = getColumnWidth();
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
+  const isGoalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
 
   const budgeted =
     budgetType === 'tracking'
@@ -152,10 +153,17 @@ function IncomeCategoryCells({
         <BalanceCell
           binding={balance}
           category={category}
+          month={month}
           onPress={onPress}
-          aria-label={t('Open balance menu for {{categoryName}} category', {
-            categoryName: category.name,
-          })}
+          aria-label={
+            budgetType === 'envelope' || isGoalTemplatesEnabled
+              ? t('Open balance menu for {{categoryName}} category', {
+                  categoryName: category.name,
+                })
+              : t('Show transactions for {{categoryName}} category', {
+                  categoryName: category.name,
+                })
+          }
         />
       </View>
     </View>
@@ -180,6 +188,7 @@ export function IncomeCategoryListItem({
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
+  const isGoalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
   const balanceMenuModalName =
     budgetType === 'tracking'
       ? 'tracking-balance-menu'
@@ -243,33 +252,35 @@ export function IncomeCategoryListItem({
       data-testid="category-row"
       {...props}
     >
-      <CategoryFundingProvider category={category} month={month}>
-        <View
-          style={{
-            height: ROW_HEIGHT,
-            borderColor: theme.tableBorder,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingLeft: 5,
-            paddingRight: 5,
-            borderBottomWidth: 1,
-            opacity: category.hidden ? 0.5 : undefined,
-            backgroundColor: monthUtils.isCurrentMonth(month)
-              ? theme.budgetCurrentMonth
-              : theme.budgetOtherMonth,
-          }}
-        >
-          <IncomeCategoryName category={category} onEdit={onEdit} />
-          <IncomeCategoryCells
-            key={`${category.id}`}
-            category={category}
-            month={month}
-            onBudgetAction={onBudgetAction}
-            onPress={onOpenBalanceMenu}
-          />
-        </View>
-      </CategoryFundingProvider>
+      <View
+        style={{
+          height: ROW_HEIGHT,
+          borderColor: theme.tableBorder,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingLeft: 5,
+          paddingRight: 5,
+          borderBottomWidth: 1,
+          opacity: category.hidden ? 0.5 : undefined,
+          backgroundColor: monthUtils.isCurrentMonth(month)
+            ? theme.budgetCurrentMonth
+            : theme.budgetOtherMonth,
+        }}
+      >
+        <IncomeCategoryName category={category} onEdit={onEdit} />
+        <IncomeCategoryCells
+          key={`${category.id}`}
+          category={category}
+          month={month}
+          onBudgetAction={onBudgetAction}
+          onPress={
+            budgetType === 'envelope' || isGoalTemplatesEnabled
+              ? onOpenBalanceMenu
+              : onShowActivity
+          }
+        />
+      </View>
     </GridListItem>
   );
 }

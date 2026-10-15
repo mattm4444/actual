@@ -9,11 +9,7 @@ import type { CleanupTemplate } from '#types/models/cleanup-templates';
 import type { Template } from '#types/models/templates';
 
 import { getSheetValue, isTrackingBudget, setBudget, setGoal } from './actions';
-import {
-  CategoryTemplateContext,
-  getTemplatePreferences,
-} from './category-template-context';
-import type { TemplatePreferences } from './category-template-context';
+import { CategoryTemplateContext } from './category-template-context';
 import { tombstoneOrphanCleanupGroups } from './cleanup-groups';
 import {
   checkTemplateNotes,
@@ -222,21 +218,15 @@ type ComputedTemplates = {
   orphanGoals: TemplateGoal[];
 };
 
-type TemplateSharedInputs = {
-  availableBudget: number;
-  preferences: TemplatePreferences;
-};
-
 async function computeTemplates(
   month: string,
   force: boolean,
   categoryTemplates: Record<CategoryEntity['id'], Template[]>,
   categories: CategoryEntity[] = [],
   skipAvailableClamp: boolean = false,
-  sharedInputs?: TemplateSharedInputs,
 ): Promise<ComputedTemplates> {
   // setup categories
-  const isTracking = sharedInputs?.preferences.isTracking ?? isTrackingBudget();
+  const isTracking = isTrackingBudget();
   if (!categories.length) {
     categories = (await getCategories()).filter(
       c => isTracking || !c.is_income,
@@ -245,12 +235,10 @@ async function computeTemplates(
 
   // setup categories to process
   const templateContexts: CategoryTemplateContext[] = [];
-  let availBudget =
-    sharedInputs?.availableBudget ??
-    (await getSheetValue(
-      monthUtils.sheetForMonth(month),
-      isTracking ? `total-saved` : `to-budget`,
-    ));
+  let availBudget = await getSheetValue(
+    monthUtils.sheetForMonth(month),
+    isTracking ? `total-saved` : `to-budget`,
+  );
   const prioritiesSet = new Set<number>();
   const errors: string[] = [];
   const orphanGoals: TemplateGoal[] = [];
@@ -270,7 +258,6 @@ async function computeTemplates(
           month,
           budgeted,
           skipAvailableClamp,
-          sharedInputs?.preferences,
         );
         // don't use the funds that are not from templates
         if (!templateContext.isGoalOnly()) {
@@ -413,87 +400,46 @@ export type CategoryFunding = {
   budgeted: number;
   recommended: number;
   remaining: number;
-  amountToFund: number;
 };
 
-// Read the same saved definitions (including legacy note templates) as Apply,
-// without writing goal_def or cached goals just to render a budget row.
+// The dryRunCategoryTemplate projection for the category's saved automations.
+// Note templates are parsed without being stored, so reading never writes.
 async function computeCategoryFunding(month: string, categoryId: string) {
   const { data: categories }: { data: CategoryEntity[] } = await aqlQuery(
     q('categories').filter({ id: categoryId }).select('*'),
   );
   const category = categories[0];
   if (!category || (category.is_income && !isTrackingBudget())) return null;
-  const templates =
+  const templates: Template[] =
     category.template_settings?.source === 'ui'
-      ? parseFundingTemplates(category)
+      ? JSON.parse(category.goal_def || '[]')
       : ((await getCategoriesWithTemplates([categoryId]))[0]?.templates ?? []);
-  return computeLoadedCategoryFunding(month, category, templates);
-}
-
-function parseFundingTemplates(category: CategoryEntity): Template[] {
-  try {
-    const parsed: unknown = JSON.parse(category.goal_def || '[]');
-    if (!Array.isArray(parsed)) {
-      throw new Error('Expected an array of budget automation templates');
-    }
-    return parsed;
-  } catch (cause) {
-    throw new Error('Invalid saved budget automation definition', { cause });
-  }
-}
-
-async function computeLoadedCategoryFunding(
-  month: string,
-  category: CategoryEntity,
-  templates: Template[],
-  sharedInputs?: TemplateSharedInputs,
-) {
-  const categoryId = category.id;
   if (templates.some(t => t.type === 'error')) {
     throw new Error('Invalid budget automation');
   }
-  // Standalone goals track a balance; the engine deliberately does not assign
-  // them a monthly budget. Cleanup-only and limit-only entries do not fund it.
+  // Goals, limits and cleanups alone never assign a monthly budget.
   if (!templates.some(t => t.directive === 'template' && t.type !== 'limit')) {
     return null;
   }
-  const input = { [categoryId]: templates };
-  // This is the same projection used by dryRunCategoryTemplate. The absolute
-  // budget recommendation already includes rollover, schedules and caps.
-  const projected = await computeTemplates(
+  const { contexts, errors } = await computeTemplates(
     month,
     true,
-    input,
+    { [categoryId]: templates },
     [category],
     true,
-    sharedInputs,
   );
-  if (projected.errors.length) throw new Error(projected.errors.join('\n'));
-  const context = projected.contexts[0];
-  if (!context) return null;
-  const values = context.getValues();
-  const budgeted = await getSheetValue(
-    monthUtils.sheetForMonth(month),
-    'budget-' + categoryId,
-  );
-  if (!Number.isFinite(values.budgeted) || !Number.isFinite(budgeted)) {
+  if (errors.length) throw new Error(errors.join('\n'));
+  const values = contexts[0].getValues();
+  if (!Number.isFinite(values.budgeted)) {
     throw new Error('Invalid budget automation amount');
   }
-  const remaining = Math.max(0, values.budgeted - budgeted);
-  // An explicit Fund click allocates the full remaining recommendation, like
-  // manually editing this budget cell. It may increase the overbudgeted total.
-  // Bulk Apply still uses its existing available-funds/priority clamping.
-  const amountToFund = remaining;
-  return {
-    funding: {
-      budgeted,
-      recommended: values.budgeted,
-      remaining,
-      amountToFund,
-    },
-    values,
+  const budgeted = contexts[0].previouslyBudgeted;
+  const funding: CategoryFunding = {
+    budgeted,
+    recommended: values.budgeted,
+    remaining: Math.max(0, values.budgeted - budgeted),
   };
+  return { funding, values };
 }
 
 export async function getCategoryFunding({
@@ -506,72 +452,6 @@ export async function getCategoryFunding({
   return (await computeCategoryFunding(month, categoryId))?.funding ?? null;
 }
 
-export type MonthlyCategoryFunding = Record<
-  CategoryEntity['id'],
-  { funding: CategoryFunding | null; error?: string }
->;
-
-// Share read-only setup for one refresh, but keep each category's projection
-// independent: a combined Apply pass would redistribute available/remainder funds.
-export async function getMonthlyCategoryFunding({
-  month,
-}: {
-  month: string;
-}): Promise<MonthlyCategoryFunding> {
-  const { data: categories }: { data: CategoryEntity[] } = await aqlQuery(
-    q('categories').select('*'),
-  );
-  const preferences = await getTemplatePreferences();
-  const eligible = categories.filter(
-    c => !c.is_income || preferences.isTracking,
-  );
-  const noteIds = eligible
-    .filter(c => c.template_settings?.source !== 'ui')
-    .map(c => c.id);
-  const noteTemplates = new Map(
-    (noteIds.length ? await getCategoriesWithTemplates(noteIds) : []).map(c => [
-      c.id,
-      c.templates,
-    ]),
-  );
-  const candidates = eligible.filter(c =>
-    c.template_settings?.source === 'ui'
-      ? !!c.goal_def
-      : noteTemplates.has(c.id),
-  );
-  if (!candidates.length) return {};
-  const sharedInputs: TemplateSharedInputs = {
-    availableBudget: await getSheetValue(
-      monthUtils.sheetForMonth(month),
-      preferences.isTracking ? 'total-saved' : 'to-budget',
-    ),
-    preferences,
-  };
-  const results: MonthlyCategoryFunding = {};
-  for (const category of candidates) {
-    try {
-      const templates =
-        category.template_settings?.source === 'ui'
-          ? parseFundingTemplates(category)
-          : (noteTemplates.get(category.id) ?? []);
-      const result = await computeLoadedCategoryFunding(
-        month,
-        category,
-        templates,
-        sharedInputs,
-      );
-      results[category.id] = { funding: result?.funding ?? null };
-    } catch (error) {
-      results[category.id] = {
-        funding: null,
-        error:
-          error instanceof Error ? error.message : 'Invalid budget automation',
-      };
-    }
-  }
-  return results;
-}
-
 export async function fundCategory({
   month,
   categoryId,
@@ -579,21 +459,18 @@ export async function fundCategory({
   month: string;
   categoryId: CategoryEntity['id'];
 }): Promise<boolean> {
-  // Called inside mutator(undoable(...)): recompute from current server state
-  // so stale UI data or repeated clicks can never reduce or double-fund a row.
+  // Recompute so stale or repeated requests never reduce or double-fund.
+  // Unlike Apply, this assigns the full recommendation regardless of funds.
   const result = await computeCategoryFunding(month, categoryId);
-  if (!result || result.funding.amountToFund <= 0) return false;
+  if (!result || result.funding.remaining <= 0) return false;
+  const { values } = result;
   await batchMessages(async () => {
-    await setBudget({
-      month,
-      category: categoryId,
-      amount: result.funding.budgeted + result.funding.amountToFund,
-    });
+    await setBudget({ month, category: categoryId, amount: values.budgeted });
     await setGoal({
       month,
       category: categoryId,
-      goal: result.values.goal,
-      long_goal: result.values.longGoal ? 1 : null,
+      goal: values.goal,
+      long_goal: values.longGoal ? 1 : null,
     });
   });
   return true;
