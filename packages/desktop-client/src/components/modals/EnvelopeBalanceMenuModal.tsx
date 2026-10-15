@@ -13,6 +13,10 @@ import {
 } from '#components/budget/BalanceWithCarryover';
 import { BalanceMenu } from '#components/budget/envelope/BalanceMenu';
 import {
+  CategoryFundingStatus,
+  useCategoryFunding,
+} from '#components/budget/goals/CategoryFundingStatus';
+import {
   Modal,
   ModalCloseButton,
   ModalHeader,
@@ -23,12 +27,13 @@ import { useCategory } from '#hooks/useCategory';
 import type { Modal as ModalType } from '#modals/modalsSlice';
 import { envelopeBudget } from '#spreadsheet/bindings';
 
-type EnvelopeBalanceMenuModalProps = Omit<
-  Extract<ModalType, { name: 'envelope-balance-menu' }>['options'],
-  'month'
->;
+type EnvelopeBalanceMenuModalProps = Extract<
+  ModalType,
+  { name: 'envelope-balance-menu' }
+>['options'];
 
 export function EnvelopeBalanceMenuModal({
+  month,
   categoryId,
   onCarryover,
   onTransfer,
@@ -42,6 +47,9 @@ export function EnvelopeBalanceMenuModal({
   };
 
   const { data: category } = useCategory(categoryId);
+  // The funding panel below replaces the saved goal summary when it can show
+  // live numbers, so the two never appear together.
+  const funding = useCategoryFunding({ category, month });
 
   if (!category) {
     return null;
@@ -72,7 +80,7 @@ export function EnvelopeBalanceMenuModal({
             </Text>
             <BalanceWithCarryover
               isDisabled
-              shouldInlineGoalStatus
+              shouldInlineGoalStatus={!funding}
               carryover={envelopeBudget.catCarryover(categoryId)}
               balance={envelopeBudget.catBalance(categoryId)}
               goal={envelopeBudget.catGoal(categoryId)}
@@ -101,6 +109,7 @@ export function EnvelopeBalanceMenuModal({
               )}
             </BalanceWithCarryover>
           </View>
+          <CategoryFundingStatus category={category} month={month} />
           <BalanceMenu
             categoryId={categoryId}
             getItemStyle={() => defaultMenuItemStyle}
