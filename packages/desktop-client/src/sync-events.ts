@@ -6,8 +6,7 @@ import { t } from 'i18next';
 import { accountGroupQueries } from './account-groups';
 import { accountQueries } from './accounts';
 import { resetSync, sync } from './app/appSlice';
-import { categoryQueries } from './budget';
-import { fundingQueries } from './budget/queries';
+import { categoryQueries, fundingQueries } from './budget';
 import {
   closeAndDownloadBudget,
   uploadBudget,
@@ -103,9 +102,7 @@ export function listenForSyncEvent(store: AppStore, queryClient: QueryClient) {
       }
 
       const tables = event.tables;
-      // Empty sync successes contain no changed inputs. Notes, schedules,
-      // rules, preferences and transactions can all affect the engine, so
-      // retain broad invalidation for actual data changes.
+      // Any data change can affect budget automations; empty syncs change nothing.
       if (tables.length > 0) {
         void queryClient.invalidateQueries({ queryKey: fundingQueries.all() });
       }

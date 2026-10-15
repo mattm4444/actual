@@ -18,11 +18,8 @@ import * as monthUtils from '@actual-app/core/shared/months';
 import { css } from '@emotion/css';
 import { t } from 'i18next';
 
-import type {
-  CategoryGroupMonthProps,
-  CategoryMonthProps,
-} from '#components/budget';
 import { BalanceWithCarryover } from '#components/budget/BalanceWithCarryover';
+import { CategoryFundingStatus } from '#components/budget/goals/CategoryFundingStatus';
 import { makeAmountGrey } from '#components/budget/util';
 import { NotesButton } from '#components/NotesButton';
 import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
@@ -35,6 +32,7 @@ import { useSheetValue } from '#hooks/useSheetValue';
 import { useUndo } from '#hooks/useUndo';
 import type { Binding, SheetFields } from '#spreadsheet';
 import { trackingBudget } from '#spreadsheet/bindings';
+import type { CategoryGroupMonthProps, CategoryMonthProps } from '..';
 
 import { BalanceMenu } from './BalanceMenu';
 import { BudgetMenu } from './BudgetMenu';
@@ -314,8 +312,14 @@ export const CategoryMonth = memo(function CategoryMonth({
                 onOpenChange={() => setMenuOpen(false)}
                 placement="bottom start"
               >
+                {category.is_income && (
+                  <CategoryFundingStatus
+                    category={category}
+                    month={month}
+                    onFunded={() => setMenuOpen(false)}
+                  />
+                )}
                 <BudgetMenu
-                  onFunded={() => setMenuOpen(false)}
                   onCopyLastMonthAverage={() => {
                     onMenuAction(month, 'copy-single-last', {
                       category: category.id,
@@ -497,8 +501,12 @@ export const CategoryMonth = memo(function CategoryMonth({
             onOpenChange={() => setBalanceMenuOpen(false)}
             placement="bottom end"
           >
-            <BalanceMenu
+            <CategoryFundingStatus
+              category={category}
+              month={month}
               onFunded={() => setBalanceMenuOpen(false)}
+            />
+            <BalanceMenu
               categoryId={category.id}
               onCarryover={carryover => {
                 onMenuAction(month, 'carryover', {

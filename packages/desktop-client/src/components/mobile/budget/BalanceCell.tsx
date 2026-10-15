@@ -79,77 +79,36 @@ export function BalanceCell({
       longGoal={longGoal}
       CarryoverIndicator={MobileCarryoverIndicator}
     >
-      {({
-        type,
-        value,
-        className: defaultClassName,
-        statusIcon,
-        statusLabel,
-        badgeStyle,
-      }) => (
+      {({ type, value, className: defaultClassName }) => (
         <Button
           variant="bare"
           style={{
             ...PILL_STYLE,
             maxWidth: columnWidth,
-            ...(badgeStyle && {
-              backgroundColor: 'transparent',
-              padding: 0,
-              minHeight: 40,
-            }),
           }}
           onPress={onPress}
-          aria-label={
-            statusLabel ? `${ariaLabel ?? ''}: ${statusLabel}` : ariaLabel
-          }
+          aria-label={ariaLabel}
         >
-          <span
-            style={{
-              ...badgeStyle,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              minWidth: 0,
-              maxWidth: columnWidth,
-            }}
-          >
-            {statusIcon}
-            {/* AutoTextSize changes its parent's alignment; isolate it from the icon. */}
-            <span
-              style={{
-                minWidth: 0,
-                maxWidth: badgeStyle
-                  ? `calc(${columnWidth} - 30px)`
-                  : columnWidth,
-              }}
+          <PrivacyFilter>
+            <AutoTextSize
+              key={value}
+              as={Text}
+              minFontSizePx={6}
+              maxFontSizePx={12}
+              mode="oneline"
+              className={cx(
+                defaultClassName,
+                css({
+                  ...styles.tnum,
+                  maxWidth: columnWidth,
+                  textAlign: 'right',
+                  fontSize: 12,
+                }),
+              )}
             >
-              <PrivacyFilter>
-                <AutoTextSize
-                  key={value}
-                  as={Text}
-                  minFontSizePx={6}
-                  maxFontSizePx={12}
-                  mode="oneline"
-                  className={cx(
-                    defaultClassName,
-                    css({
-                      ...styles.tnum,
-                      maxWidth: badgeStyle
-                        ? `calc(${columnWidth} - 30px)`
-                        : columnWidth,
-                      textAlign: 'right',
-                      lineHeight: '18px',
-                      display: 'block',
-                      fontSize: 12,
-                    }),
-                  )}
-                >
-                  {format(value, type)}
-                </AutoTextSize>
-              </PrivacyFilter>
-            </span>
-          </span>
+              {format(value, type)}
+            </AutoTextSize>
+          </PrivacyFilter>
         </Button>
       )}
     </BalanceWithCarryover>

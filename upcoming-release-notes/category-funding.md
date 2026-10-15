@@ -3,4 +3,4 @@ category: Features
 authors: [mattm4444]
 ---
 
-Show goal progress and an assign-money action in category balance menus on desktop and mobile while keeping budget rows compact.
+Show how much money categories with budget automations still need in their balance and budget menus, with a button to assign it
