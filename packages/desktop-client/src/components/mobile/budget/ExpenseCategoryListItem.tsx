@@ -191,6 +191,7 @@ function ExpenseCategoryCells({
         <BalanceCell
           binding={balance}
           category={category}
+          month={month}
           show3Columns={show3Columns}
           onPress={onOpenBalanceMenu}
           aria-label={t('Open balance menu for {{categoryName}} category', {

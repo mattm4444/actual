@@ -6,12 +6,15 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { fundingQueries } from '#budget/queries';
+import { BalanceWithCarryover } from '#components/budget/BalanceWithCarryover';
+import { SheetNameProvider } from '#hooks/useSheetName';
 import {
   configureTestAppStore,
   createTestQueryClient,
   TestProviders,
 } from '#mocks';
 import { mergeSyncedPrefs } from '#prefs/prefsSlice';
+import { envelopeBudget } from '#spreadsheet/bindings';
 
 import { CategoryFundingStatus } from './CategoryFundingStatus';
 
@@ -21,6 +24,15 @@ vi.mock(
 );
 vi.mock('@actual-app/components/hooks/useResponsive', () => ({
   useResponsive: () => ({ isNarrowWidth: true }),
+}));
+vi.mock('#hooks/useSheetValue', () => ({
+  useSheetValue: (binding: string | { name: string }) => {
+    const name = typeof binding === 'string' ? binding : binding.name;
+    if (name.startsWith('leftover-')) return balance;
+    if (name.startsWith('budget-')) return funding?.budgeted ?? 0;
+    // No saved goal: the funding status must work before Apply.
+    return null;
+  },
 }));
 
 const category: CategoryEntity = {
@@ -37,6 +49,7 @@ const funded = { budgeted: 65000, recommended: 65000, remaining: 0 };
 const assignName =
   'Assign money to underfunded goal: Groceries for January 2024';
 
+let balance: number;
 let funding: CategoryFunding | null;
 let notes: NoteEntity[];
 let client: ReturnType<typeof createTestQueryClient>;
@@ -51,15 +64,30 @@ function renderFunding({
 } = {}) {
   render(
     <TestProviders queryClient={client} store={store}>
-      <View onKeyDown={onKeyDown}>
-        <CategoryFundingStatus
+      <SheetNameProvider name="budget202401">
+        <BalanceWithCarryover
           category={cat}
           month="2024-01"
-          onFunded={onFunded}
+          carryover={envelopeBudget.catCarryover(cat.id)}
+          balance={envelopeBudget.catBalance(cat.id)}
+          goal={envelopeBudget.catGoal(cat.id)}
+          budgeted={envelopeBudget.catBudgeted(cat.id)}
+          longGoal={envelopeBudget.catLongGoal(cat.id)}
         />
-      </View>
+        <View onKeyDown={onKeyDown}>
+          <CategoryFundingStatus
+            category={cat}
+            month="2024-01"
+            onFunded={onFunded}
+          />
+        </View>
+      </SheetNameProvider>
     </TestProviders>,
   );
+}
+
+function pill() {
+  return document.querySelector('[data-funding-state]');
 }
 
 function deferNextRead() {
@@ -72,6 +100,7 @@ function deferNextRead() {
 }
 
 beforeEach(() => {
+  balance = 30620;
   funding = { budgeted: 0, recommended: 65000, remaining: 65000 };
   notes = [];
   client = createTestQueryClient();
@@ -94,25 +123,34 @@ describe('CategoryFundingStatus', () => {
     [
       'underfunded',
       { budgeted: 0, recommended: 65000, remaining: 65000 },
+      30620,
       '650.00 needed',
     ],
-    ['underfunded', underfunded, '250.00 needed'],
-    ['funded', funded, 'Funded'],
-    ['funded', { ...funded, budgeted: 90000 }, 'Funded'],
+    ['underfunded', underfunded, 30620, '250.00 needed'],
+    ['funded', funded, 30620, 'Funded'],
+    ['funded', { ...funded, budgeted: 90000 }, 30620, 'Funded'],
     [
       'not-needed',
       { budgeted: 0, recommended: 0, remaining: 0 },
+      0,
       'No funding needed',
     ],
-  ])('shows the %s state from the engine result', async (_, value, text) => {
-    funding = value;
-    renderFunding();
-    expect(await screen.findByText(text)).toBeInTheDocument();
-    expect(screen.queryAllByRole('button', { name: assignName })).toHaveLength(
-      value.remaining > 0 ? 1 : 0,
-    );
-    expect(read).toHaveBeenCalledOnce();
-  });
+    ['overspent', funded, -26317, 'Funded'],
+    ['overspent', underfunded, -26317, '250.00 needed'],
+  ])(
+    'shows the %s state from the engine result',
+    async (state, value, amount, text) => {
+      funding = value;
+      balance = amount;
+      renderFunding();
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(pill()).toHaveAttribute('data-funding-state', state);
+      expect(
+        screen.queryAllByRole('button', { name: assignName }),
+      ).toHaveLength(value.remaining > 0 ? 1 : 0);
+      expect(read).toHaveBeenCalledOnce();
+    },
+  );
 
   it('shows an unavailable state instead of a funded check when the engine fails', async () => {
     read.mockRejectedValue(new Error('Invalid automation'));
@@ -120,6 +158,7 @@ describe('CategoryFundingStatus', () => {
     expect(
       await screen.findByText('Automation unavailable'),
     ).toBeInTheDocument();
+    expect(pill()).toHaveAttribute('data-funding-state', 'unavailable');
     expect(screen.queryByText('Funded')).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
@@ -136,6 +175,7 @@ describe('CategoryFundingStatus', () => {
     renderFunding({ cat });
     await act(() => Promise.resolve());
     expect(read).not.toHaveBeenCalled();
+    expect(pill()).not.toBeInTheDocument();
     expect(
       screen.queryByTestId('category-funding-status'),
     ).not.toBeInTheDocument();
@@ -154,10 +194,12 @@ describe('CategoryFundingStatus', () => {
     const onKeyDown = vi.fn();
     renderFunding({ onFunded, onKeyDown });
     const button = await screen.findByRole('button', { name: assignName });
+    expect(pill()).toHaveTextContent('Underfunded:');
     await user.tab();
     expect(button).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(await screen.findByText('Funded')).toBeInTheDocument();
+    expect(pill()).toHaveAttribute('data-funding-state', 'funded');
     expect(fund).toHaveBeenCalledExactlyOnceWith({
       month: '2024-01',
       categoryId: 'groceries',
@@ -210,11 +252,13 @@ describe('CategoryFundingStatus', () => {
       'aria-busy',
       'true',
     );
+    expect(pill()).toHaveAttribute('data-funding-state', 'updating');
     await finish(null);
     await waitFor(() =>
       expect(
         screen.queryByTestId('category-funding-status'),
       ).not.toBeInTheDocument(),
     );
+    expect(pill()).not.toBeInTheDocument();
   });
 });

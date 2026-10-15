@@ -153,6 +153,7 @@ function IncomeCategoryCells({
         <BalanceCell
           binding={balance}
           category={category}
+          month={month}
           onPress={onPress}
           aria-label={
             budgetType === 'envelope' || isGoalTemplatesEnabled
